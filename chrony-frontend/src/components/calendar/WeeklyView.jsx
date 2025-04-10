@@ -2,284 +2,42 @@ import React, { useState } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import styled from 'styled-components';
+import './calendar.css';
 
 // Set up the localizer for the calendar
 const localizer = momentLocalizer(moment);
 
-// Styled components for the calendar
-const CalendarContainer = styled.div`
-  height: 80vh;
-  width: 100vw;
-  max-width: 100%;
-  padding: 20px;
-  
-  /* Customize calendar for dark theme */
-  .rbc-calendar {
-    width: 100%;
-    height: 100%;
-    background-color: #2a2a2a;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  }
-  
-  .rbc-header {
-    background-color: #333;
-    color: white;
-    padding: 10px 5px;
-    font-weight: bold;
-  }
-  
-  .rbc-time-view, .rbc-month-view {
-    border: 1px solid #444;
-  }
-  
-  .rbc-time-content {
-    border-top: 1px solid #444;
-  }
-  
-  .rbc-timeslot-group {
-    border-bottom: 1px solid #444;
-  }
-  
-  .rbc-day-slot .rbc-time-slot {
-    border-top: 1px solid #393939;
-  }
-  
-  .rbc-time-slot {
-    min-height: 30px;
-  }
-  
-  .rbc-today {
-    background-color: rgba(66, 135, 245, 0.1);
-  }
-  
-  .rbc-current-time-indicator {
-    background-color: #f44336;
-    height: 2px;
-  }
-  
-  .rbc-btn-group button {
-    color: #fff;
-    background-color: #333;
-    border-color: #444;
-  }
-  
-  .rbc-btn-group button.rbc-active {
-    background-color: #4287f5;
-    border-color: #4287f5;
-  }
-  
-  .rbc-time-gutter .rbc-timeslot-group {
-    min-width: 100px;
-  }
-  
-  .rbc-event {
-    border-radius: 4px;
-  }
-`;
-
-const EventTypeTag = styled.span`
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  margin-right: 5px;
-  color: white;
-  background-color: ${props => {
-    switch(props.eventType) {
-      case 'fixed':
-        return '#3174ad';
-      case 'flexible':
-        return '#59a85f';
-      case 'fluid':
-        return '#e08826';
-      default:
-        return '#999';
-    }
-  }};
-`;
-
 // Event types with their properties
 const eventTypes = {
-  fixed: { name: "Fixed", color: "#3174ad" },
-  flexible: { name: "Flexible", color: "#59a85f" },
-  fluid: { name: "Fluid", color: "#e08826" }
+  fixed: { name: "Fixed", color: "#0081A7", bgColor: "#0081A720" },
+  flexible: { name: "Flexible", color: "#00AFB9", bgColor: "#00AFB920" },
+  fluid: { name: "Fluid", color: "#F07167", bgColor: "#F0716720" }
 };
 
-// Sample initial events - in a real app these would come from an API
+// Sample initial events - these would come from an API
 const initialEvents = [
   {
     id: 1,
     title: 'Introduction to CS Lecture',
-    start: new Date(2025, 2, 24, 10, 0), // March 24, 2025, 10:00 AM
-    end: new Date(2025, 2, 24, 12, 0),   // March 24, 2025, 12:00 PM
+    start: new Date(2025, 3, 7, 10, 0),  // April 7, 2025, 10:00 AM
+    end: new Date(2025, 3, 7, 12, 0),    // April 7, 2025, 12:00 PM
     type: 'fixed'
   },
   {
     id: 2,
     title: 'Workout Session',
-    start: new Date(2025, 2, 25, 16, 0), // March 25, 2025, 4:00 PM
-    end: new Date(2025, 2, 25, 17, 30),  // March 25, 2025, 5:30 PM
+    start: new Date(2025, 3, 8, 16, 0),  // April 8, 2025, 4:00 PM
+    end: new Date(2025, 3, 8, 17, 30),   // April 8, 2025, 5:30 PM
     type: 'flexible'
   },
   {
     id: 3,
     title: 'Reading Assignment',
-    start: new Date(2025, 2, 26, 14, 0), // March 26, 2025, 2:00 PM
-    end: new Date(2025, 2, 26, 16, 0),   // March 26, 2025, 4:00 PM
+    start: new Date(2025, 3, 9, 14, 0),  // April 9, 2025, 2:00 PM
+    end: new Date(2025, 3, 9, 16, 0),    // April 9, 2025, 4:00 PM
     type: 'fluid'
   }
 ];
-
-// Simple form for adding/editing events
-const EventForm = ({ event, onSave, onCancel }) => {
-  const [title, setTitle] = useState(event ? event.title : '');
-  const [start, setStart] = useState(event ? event.start : new Date());
-  const [end, setEnd] = useState(event ? event.end : new Date());
-  const [type, setType] = useState(event ? event.type : 'fixed');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave({
-      id: event ? event.id : Date.now(),
-      title,
-      start,
-      end,
-      type
-    });
-  };
-
-  const formStyle = {
-    padding: '25px', 
-    maxWidth: '500px',
-    margin: '0 auto',
-    backgroundColor: '#2a2a2a',
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-    border: '1px solid #444'
-  };
-  
-  const inputStyle = {
-    width: '100%', 
-    padding: '10px',
-    backgroundColor: '#333',
-    border: '1px solid #555',
-    borderRadius: '4px',
-    color: 'white',
-    fontSize: '14px'
-  };
-  
-  const labelStyle = {
-    display: 'block', 
-    marginBottom: '8px',
-    fontWeight: 'bold',
-    color: '#ddd',
-    textAlign: 'left'
-  };
-  
-  const buttonStyle = {
-    padding: '10px 20px',
-    border: 'none',
-    borderRadius: '4px',
-    fontWeight: 'bold',
-    cursor: 'pointer'
-  };
-
-  return (
-    <form onSubmit={handleSubmit} style={formStyle}>
-      <div style={{ marginBottom: '20px' }}>
-        <label htmlFor="title" style={labelStyle}>Title:</label>
-        <input
-          type="text"
-          id="title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          style={inputStyle}
-          required
-        />
-      </div>
-
-      <div style={{ marginBottom: '20px' }}>
-        <label htmlFor="start" style={labelStyle}>Start Time:</label>
-        <input
-          type="datetime-local"
-          id="start"
-          value={moment(start).format('YYYY-MM-DDTHH:mm')}
-          onChange={(e) => setStart(new Date(e.target.value))}
-          style={inputStyle}
-          required
-        />
-      </div>
-
-      <div style={{ marginBottom: '20px' }}>
-        <label htmlFor="end" style={labelStyle}>End Time:</label>
-        <input
-          type="datetime-local"
-          id="end"
-          value={moment(end).format('YYYY-MM-DDTHH:mm')}
-          onChange={(e) => setEnd(new Date(e.target.value))}
-          style={inputStyle}
-          required
-        />
-      </div>
-
-      <div style={{ marginBottom: '25px' }}>
-        <label style={labelStyle}>Event Type:</label>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
-          {Object.entries(eventTypes).map(([key, { name, color }]) => (
-            <label key={key} style={{ 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              padding: '8px 12px', 
-              borderRadius: '4px',
-              backgroundColor: type === key ? `${color}40` : 'transparent',
-              border: `1px solid ${color}`,
-              cursor: 'pointer'
-            }}>
-              <input
-                type="radio"
-                name="eventType"
-                value={key}
-                checked={type === key}
-                onChange={() => setType(key)}
-                style={{ marginRight: '8px' }}
-              />
-              <span style={{ color: color, fontWeight: type === key ? 'bold' : 'normal' }}>{name}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <button 
-          type="submit" 
-          style={{ 
-            ...buttonStyle, 
-            backgroundColor: '#4287f5', 
-            color: 'white', 
-            flex: '1', 
-            marginRight: '10px' 
-          }}
-        >
-          Save
-        </button>
-        <button 
-          type="button" 
-          onClick={onCancel} 
-          style={{ 
-            ...buttonStyle, 
-            backgroundColor: '#444', 
-            color: '#ddd',
-            flex: '1'
-          }}
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  );
-};
 
 const WeeklyView = () => {
   const [events, setEvents] = useState(initialEvents);
@@ -287,11 +45,112 @@ const WeeklyView = () => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
 
+  // Simple form for adding/editing events
+  const EventForm = ({ event, onSave, onCancel }) => {
+    const [title, setTitle] = useState(event ? event.title : '');
+    const [start, setStart] = useState(event ? event.start : new Date());
+    const [end, setEnd] = useState(event ? event.end : new Date());
+    const [type, setType] = useState(event ? event.type : 'fixed');
+
+    const handleSubmit = (e) => {
+      e.preventDefault();
+      onSave({
+        id: event ? event.id : Date.now(),
+        title,
+        start,
+        end,
+        type
+      });
+    };
+
+    return (
+      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto">
+        <div className="mb-4">
+          <label htmlFor="title" className="block text-gray-700 font-medium mb-2">Title:</label>
+          <input
+            type="text"
+            id="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#00AFB9]"
+            required
+          />
+        </div>
+
+        <div className="mb-4">
+          <label htmlFor="start" className="block text-gray-700 font-medium mb-2">Start Time:</label>
+          <input
+            type="datetime-local"
+            id="start"
+            value={moment(start).format('YYYY-MM-DDTHH:mm')}
+            onChange={(e) => setStart(new Date(e.target.value))}
+            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#00AFB9]"
+            required
+          />
+        </div>
+
+        <div className="mb-4">
+          <label htmlFor="end" className="block text-gray-700 font-medium mb-2">End Time:</label>
+          <input
+            type="datetime-local"
+            id="end"
+            value={moment(end).format('YYYY-MM-DDTHH:mm')}
+            onChange={(e) => setEnd(new Date(e.target.value))}
+            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-[#00AFB9]"
+            required
+          />
+        </div>
+
+        <div className="mb-5">
+          <label className="block text-gray-700 font-medium mb-2">Event Type:</label>
+          <div className="flex space-x-3">
+            {Object.entries(eventTypes).map(([key, { name, color }]) => (
+              <label key={key} className={`flex items-center p-2 border rounded cursor-pointer ${type === key ? 'bg-opacity-20' : ''}`} style={{ borderColor: color, backgroundColor: type === key ? `${color}20` : 'transparent' }}>
+                <input
+                  type="radio"
+                  name="eventType"
+                  value={key}
+                  checked={type === key}
+                  onChange={() => setType(key)}
+                  className="mr-2"
+                />
+                <span style={{ color }} className={type === key ? 'font-semibold' : ''}>
+                  {name}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex space-x-3">
+          <button 
+            type="submit" 
+            className="flex-1 bg-[#00AFB9] text-white py-2 px-4 rounded font-medium hover:bg-[#0081A7] transition duration-200"
+          >
+            Save
+          </button>
+          <button 
+            type="button" 
+            onClick={onCancel} 
+            className="flex-1 bg-gray-200 text-gray-700 py-2 px-4 rounded font-medium hover:bg-gray-300 transition duration-200"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    );
+  };
+
   // Custom event display component
   const EventComponent = ({ event }) => (
-    <div style={{ height: '100%', backgroundColor: eventTypes[event.type].color, color: 'white', padding: '2px 5px' }}>
-      <EventTypeTag eventType={event.type}>{eventTypes[event.type].name}</EventTypeTag>
-      <strong>{event.title}</strong>
+    <div 
+      className="h-full rounded px-2 py-1 overflow-hidden" 
+      style={{ backgroundColor: eventTypes[event.type].bgColor, borderLeft: `3px solid ${eventTypes[event.type].color}` }}
+    >
+      <div className="text-xs inline-block px-1 py-0.5 rounded mb-1" style={{ backgroundColor: eventTypes[event.type].color, color: 'white' }}>
+        {eventTypes[event.type].name}
+      </div>
+      <div className="font-medium text-gray-800 text-sm">{event.title}</div>
     </div>
   );
 
@@ -321,34 +180,24 @@ const WeeklyView = () => {
   };
 
   return (
-    <CalendarContainer>
-      <h1>Weekly Schedule</h1>
-      
-      <button 
-        onClick={() => {
-          setSelectedEvent(null);
-          setSelectedSlot({ start: new Date(), end: new Date() });
-          setShowForm(true);
-        }}
-        style={{ 
-          marginBottom: '15px', 
-          padding: '10px 20px', 
-          backgroundColor: '#4287f5', 
-          color: 'white', 
-          border: 'none', 
-          borderRadius: '4px',
-          fontWeight: 'bold',
-          cursor: 'pointer',
-          fontSize: '14px',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-        }}
-      >
-        + Add Event
-      </button>
+    <div className="container mx-auto px-4 py-6 max-w-full">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-semibold text-gray-800">Weekly Schedule</h1>
+        <button 
+          onClick={() => {
+            setSelectedEvent(null);
+            setSelectedSlot({ start: new Date(), end: new Date() });
+            setShowForm(true);
+          }}
+          className="bg-[#00AFB9] hover:bg-[#0081A7] text-white py-2 px-4 rounded flex items-center transition duration-200"
+        >
+          <span className="mr-1 text-lg">+</span> Add Event
+        </button>
+      </div>
       
       {showForm ? (
-        <div style={{ marginBottom: '20px' }}>
-          <h2>{selectedEvent ? 'Edit Event' : 'Add New Event'}</h2>
+        <div className="mb-8">
+          <h2 className="text-xl font-medium text-gray-700 mb-4">{selectedEvent ? 'Edit Event' : 'Add New Event'}</h2>
           <EventForm 
             event={selectedEvent || (selectedSlot ? { start: selectedSlot.start, end: selectedSlot.end } : null)} 
             onSave={handleSaveEvent} 
@@ -356,13 +205,12 @@ const WeeklyView = () => {
           />
         </div>
       ) : (
-        <div style={{ height: '100%', width: '100%' }}>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 h-[75vh]">
           <Calendar
             localizer={localizer}
             events={events}
             startAccessor="start"
             endAccessor="end"
-            style={{ height: '100%', width: '100%' }}
             defaultView="week"
             views={['week', 'day']}
             onSelectEvent={handleSelectEvent}
@@ -370,16 +218,21 @@ const WeeklyView = () => {
             selectable
             eventPropGetter={(event) => ({
               style: {
-                backgroundColor: eventTypes[event.type].color
+                backgroundColor: eventTypes[event.type].bgColor,
+                borderLeft: `3px solid ${eventTypes[event.type].color}`,
+                color: 'black',
+                border: '0',
+                borderRadius: '4px'
               }
             })}
             components={{
               event: EventComponent
             }}
+            className="chrony-calendar"
           />
         </div>
       )}
-    </CalendarContainer>
+    </div>
   );
 };
 
