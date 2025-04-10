@@ -1,56 +1,29 @@
+@import "tailwindcss";
+
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-display: "Inter", system-ui, sans-serif;
+  
+  /* Your color palette */
+  --color-primary: #0081A7;
+  --color-primary-light: #00AFB9;
+  --color-accent-yellow: #FDFCDC;
+  --color-accent-peach: #FED9B7;
+  --color-accent-coral: #F07167;
+}
+
+/* Base styles */
+body {
+  font-family: var(--font-display);
+  color: #333;
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #1a1a1a;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background-color: #f9f9f9;
+  margin: 0;
+  padding: 0;
 }
 
 html, body, #root {
-  margin: 0;
-  padding: 0;
-  width: 100%;
   height: 100%;
+  width: 100%;
   overflow-x: hidden;
-}
-
-#root {
-  display: flex;
-  flex-direction: column;
-}
-
-/* Override react-big-calendar default styles for width */
-.rbc-calendar {
-  width: 100% !important;
-}
-
-.rbc-time-view {
-  width: 100% !important;
-}
-
-.rbc-time-header {
-  width: 100% !important;
-}
-
-/* Mobile responsiveness */
-@media (max-width: 768px) {
-  .rbc-toolbar {
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .rbc-toolbar button {
-    margin: 5px 0;
-  }
-  
-  .rbc-time-gutter {
-    width: 80px !important;
-  }
 }
