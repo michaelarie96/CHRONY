@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy:{
-      // anything in frontend that interacts with '/api/*' path Is forwarded to port 3000 ( backend port )
+      // anything in frontend that interacts with '/api/*' path Is forwarded to http://localhost:3000 ( backend server - local )
       '/api': 'http://localhost:3000' 
     }
   }
