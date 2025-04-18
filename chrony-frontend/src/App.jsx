@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import WeeklyView from './components/calendar/WeeklyView';
 import Sidebar from './components/common/Sidebar';
 
+import TestPing from './components/TestPing.jsx';
+
 function App() {
   const [activeView, setActiveView] = useState('calendar');
   
@@ -36,6 +38,10 @@ function App() {
         </header>
         
         <main className="flex-1 container mx-auto py-6">
+
+
+          <TestPing /> {/* ✅ Rendered directly for now */}
+
           {renderView()}
         </main>
         
@@ -48,5 +54,9 @@ function App() {
     </div>
   );
 }
+
+
+
+
 
 export default App;
