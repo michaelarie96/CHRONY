@@ -1,12 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import WeeklyView from './components/calendar/WeeklyView';
 import Sidebar from './components/common/Sidebar';
-
-import TestPing from './components/TestPing.jsx';
+import AuthPage from './components/auth/AuthPage';
 
 function App() {
   const [activeView, setActiveView] = useState('calendar');
+  const [user, setUser] = useState(null);
+
+  // Check if user is logged in on component mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+  }, []);
+
+    const handleLoginSuccess = (username) => {
+      setUser({ username });
+    };
   
+    const handleLogout = () => {
+      localStorage.removeItem('user');
+      setUser(null);
+    };
+
+  // If user is not logged in, show auth page
+  if (!user) {
+    return <AuthPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
   // Render the appropriate component based on the active view
   const renderView = () => {
     switch(activeView) {
@@ -33,15 +55,19 @@ function App() {
               {activeView === 'time-tracker' && 'Time Tracker'}
               {activeView === 'analytics' && 'Analytics'}
             </h1>
-            <div className="text-sm text-gray-500">Personal Time Management</div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-500">Welcome, {user.username}</span>
+              <button 
+                onClick={handleLogout}
+                className="text-sm text-red-500 hover:text-red-700"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </header>
         
         <main className="flex-1 container mx-auto py-6">
-
-
-          <TestPing /> {/* ✅ Rendered directly for now */}
-
           {renderView()}
         </main>
         
