@@ -1,133 +1,170 @@
-/* Main calendar container */
 .chrony-calendar {
-    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", Segoe UI Symbol, "Noto Color Emoji";
-    color: #333;
-  }
-  
-  /* Header and toolbar */
+  font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", Segoe UI Symbol, "Noto Color Emoji";
+  color: #333;
+}
+
+/* Header and toolbar */
+.rbc-toolbar {
+  margin-bottom: 20px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+}
+
+.rbc-toolbar button {
+  color: #0081A7;
+  background-color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 129, 167, 0.2);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.rbc-toolbar button:hover {
+  background-color: rgba(0, 175, 185, 0.1);
+  border-color: #00AFB9;
+}
+
+.rbc-toolbar button.rbc-active {
+  background: linear-gradient(to right, #00AFB9, #0081A7);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgba(0, 129, 167, 0.3);
+}
+
+.rbc-toolbar button.rbc-active:hover {
+  background: linear-gradient(to right, #0081A7, #00AFB9);
+  box-shadow: 0 2px 10px rgba(0, 129, 167, 0.4);
+}
+
+/* Day headers */
+.rbc-header {
+  font-weight: 500;
+  padding: 10px 3px;
+  border-bottom: 1px solid rgba(0, 129, 167, 0.1);
+  background: rgba(255, 255, 255, 0.5);
+  color: #0081A7;
+}
+
+.rbc-header + .rbc-header {
+  border-left: 1px solid rgba(0, 129, 167, 0.1);
+}
+
+.rbc-header.rbc-today {
+  background: rgba(253, 252, 220, 0.5);
+  font-weight: 600;
+}
+
+/* Time slots */
+.rbc-timeslot-group {
+  border-bottom: 1px solid rgba(0, 129, 167, 0.05);
+}
+
+.rbc-time-slot {
+  border-top: 1px solid rgba(0, 129, 167, 0.03);
+}
+
+.rbc-time-view {
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+.rbc-time-content {
+  border-top: 1px solid rgba(0, 129, 167, 0.1);
+}
+
+.rbc-time-content > * + * > * {
+  border-left: 1px solid rgba(0, 129, 167, 0.1);
+}
+
+/* Today highlight */
+.rbc-today {
+  background-color: rgba(253, 252, 220, 0.3);
+}
+
+/* Current time indicator */
+.rbc-current-time-indicator {
+  background-color: #F07167;
+  height: 2px;
+  position: relative;
+}
+
+.rbc-current-time-indicator::before {
+  content: '';
+  position: absolute;
+  height: 8px;
+  width: 8px;
+  background-color: #F07167;
+  border-radius: 50%;
+  left: -4px;
+  top: -3px;
+}
+
+/* Time gutter */
+.rbc-time-gutter .rbc-timeslot-group {
+  border-right: 1px solid rgba(0, 129, 167, 0.1);
+}
+
+.rbc-label {
+  font-size: 12px;
+  color: #0081A7;
+  padding: 5px;
+  font-weight: 500;
+}
+
+/* Events */
+.rbc-event {
+  background-color: transparent;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.rbc-event.rbc-selected {
+  background-color: transparent;
+  outline: 2px solid #0081A7;
+  box-shadow: 0 0 0 4px rgba(0, 129, 167, 0.1);
+}
+
+.rbc-day-slot .rbc-events-container {
+  margin-right: 1px;
+}
+
+/* Custom event styling - keep the component styling from WeeklyView.jsx */
+/* Just enhance with shadow and hover effects */
+.h-full.rounded.px-2.py-1 {
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.h-full.rounded.px-2.py-1:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Event type badges */
+.text-xs.inline-block.px-1.py-0\.5.rounded.mb-1 {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Make the calendar responsive */
+@media (max-width: 768px) {
   .rbc-toolbar {
-    margin-bottom: 20px;
-    padding: 10px;
+    flex-direction: column;
+    align-items: center;
   }
   
   .rbc-toolbar button {
-    color: #555;
-    background-color: #f8f8f8;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    padding: 6px 12px;
-    font-weight: 500;
+    margin: 5px 0;
   }
   
-  .rbc-toolbar button:hover {
-    background-color: #f1f1f1;
-    border-color: #d0d0d0;
+  .rbc-time-gutter {
+    width: 60px !important;
   }
-  
-  .rbc-toolbar button.rbc-active {
-    background-color: #00AFB9;
-    color: white;
-    border-color: #00AFB9;
-  }
-  
-  .rbc-toolbar button.rbc-active:hover {
-    background-color: #0081A7;
-    border-color: #0081A7;
-  }
-  
-  /* Day headers */
-  .rbc-header {
-    font-weight: 500;
-    padding: 10px 3px;
-    border-bottom: 1px solid #eaeaea;
-  }
-  
-  .rbc-header + .rbc-header {
-    border-left: 1px solid #eaeaea;
-  }
-  
-  .rbc-header.rbc-today {
-    background-color: #FDFCDC20;
-  }
-  
-  /* Time slots */
-  .rbc-timeslot-group {
-    border-bottom: 1px solid #f0f0f0;
-  }
-  
-  .rbc-time-slot {
-    border-top: 1px solid #f8f8f8;
-  }
-  
-  .rbc-time-view {
-    border: 1px solid #eaeaea;
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  
-  .rbc-time-content {
-    border-top: 1px solid #eaeaea;
-  }
-  
-  .rbc-time-content > * + * > * {
-    border-left: 1px solid #eaeaea;
-  }
-  
-  .rbc-day-slot .rbc-time-slot {
-    border-top: 1px solid #f8f8f8;
-  }
-  
-  /* Today highlight */
-  .rbc-today {
-    background-color: #FDFCDC20;
-  }
-  
-  /* Current time indicator */
-  .rbc-current-time-indicator {
-    background-color: #F07167;
-    height: 2px;
-  }
-  
-  /* Time gutter */
-  .rbc-time-gutter .rbc-timeslot-group {
-    border-right: 1px solid #eaeaea;
-  }
-  
-  .rbc-label {
-    font-size: 12px;
-    color: #666;
-    padding: 5px;
-  }
-  
-  /* Events */
-  .rbc-event {
-    background-color: transparent;
-    padding: 0;
-    border: none;
-    border-radius: 4px;
-  }
-  
-  .rbc-event.rbc-selected {
-    background-color: transparent;
-    outline: 2px solid #00AFB9;
-  }
-  
-  .rbc-day-slot .rbc-events-container {
-    margin-right: 1px;
-  }
-  
-  /* Make the calendar responsive */
-  @media (max-width: 768px) {
-    .rbc-toolbar {
-      flex-direction: column;
-      align-items: center;
-    }
-    
-    .rbc-toolbar button {
-      margin: 5px 0;
-    }
-    
-    .rbc-time-gutter {
-      width: 60px !important;
-    }
-  }
+}
