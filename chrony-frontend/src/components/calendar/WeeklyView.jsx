@@ -30,22 +30,22 @@ const initialEvents = [
   {
     id: 1,
     title: 'Introduction to CS Lecture',
-    start: new Date(2025, 3, 7, 10, 0),  // April 7, 2025, 10:00 AM
-    end: new Date(2025, 3, 7, 12, 0),    // April 7, 2025, 12:00 PM
+    start: new Date(2025, 3, 21, 10, 0),  // April 21, 2025, 10:00 AM
+    end: new Date(2025, 3, 21, 12, 0),    // April 21, 2025, 12:00 PM
     type: 'fixed'
   },
   {
     id: 2,
     title: 'Workout Session',
-    start: new Date(2025, 3, 8, 16, 0),  // April 8, 2025, 4:00 PM
-    end: new Date(2025, 3, 8, 17, 30),   // April 8, 2025, 5:30 PM
+    start: new Date(2025, 3, 22, 16, 0),  // April 22, 2025, 4:00 PM
+    end: new Date(2025, 3, 22, 17, 30),   // April 22, 2025, 5:30 PM
     type: 'flexible'
   },
   {
     id: 3,
     title: 'Reading Assignment',
-    start: new Date(2025, 3, 9, 14, 0),  // April 9, 2025, 2:00 PM
-    end: new Date(2025, 3, 9, 16, 0),    // April 9, 2025, 4:00 PM
+    start: new Date(2025, 3, 23, 14, 0),  // April 23, 2025, 2:00 PM
+    end: new Date(2025, 3, 23, 16, 0),    // April 23, 2025, 4:00 PM
     type: 'fluid'
   }
 ];
