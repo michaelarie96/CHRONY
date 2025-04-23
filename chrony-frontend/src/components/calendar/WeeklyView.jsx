@@ -12,9 +12,6 @@ const formats = {
     `${local.format(start, 'HH:mm', culture)} – ${local.format(end, 'HH:mm', culture)}`
 };
 
-
-
-
 const eventTypes = {
   fixed: { name: "Fixed", color: "#0081A7", bgColor: "#0081A720" },
   flexible: { name: "Flexible", color: "#00AFB9", bgColor: "#00AFB920" },
@@ -55,11 +52,12 @@ const WeeklyView = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentView, setCurrentView] = useState('week');
   const handleDeleteEvent = (eventId) => {
     setEvents(events.filter(e => e.id !== eventId));
     setShowForm(false);
   };
-
 
   // Custom event display component
   const EventComponent = ({ event }) => (
@@ -85,6 +83,16 @@ const WeeklyView = () => {
     setSelectedEvent(null);
     setSelectedSlot(slotInfo);
     setShowForm(true);
+  };
+
+  // Handler for navigating between dates
+  const handleNavigate = (newDate) => {
+    setCurrentDate(newDate);
+  };
+
+  // Handler for changing the view (day, week)
+  const handleViewChange = (view) => {
+    setCurrentView(view);
   };
 
   // Save the event (new or edited)
@@ -134,6 +142,10 @@ const WeeklyView = () => {
             endAccessor="end"
             defaultView="week"
             views={['week', 'day']}
+            date={currentDate}
+            onNavigate={handleNavigate}
+            onView={handleViewChange}
+            view={currentView}
             onSelectEvent={handleSelectEvent}
             onSelectSlot={handleSelectSlot}
             selectable
