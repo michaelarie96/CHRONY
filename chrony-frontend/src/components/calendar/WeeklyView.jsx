@@ -117,7 +117,7 @@ const WeeklyView = () => {
             setSelectedSlot({ start: new Date(), end: new Date() });
             setShowForm(true);
           }}
-          className="bg-[#00AFB9] hover:bg-[#0081A7] text-white py-2 px-4 rounded flex items-center transition duration-200"
+          className="bg-gradient-to-r from-[#00AFB9] to-[#0081A7] hover:bg-gradient-to-l text-white hover:text-gray-800 py-2 px-4 rounded flex items-center transition-all duration-300 hover:shadow-md font-medium"
         >
           <span className="mr-1 text-lg">+</span> Add Event
         </button>
