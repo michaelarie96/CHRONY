@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
 import EventForm from './EventForm';
@@ -20,7 +20,6 @@ const eventTypes = {
 
 // Set up the localizer for the calendar
 const localizer = momentLocalizer(moment);
-
 
 // Sample initial events - these would come from an API
 const initialEvents = [
@@ -54,10 +53,49 @@ const WeeklyView = () => {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentView, setCurrentView] = useState('week');
+  const [scrollPosition, setScrollPosition] = useState(0);
+  const calendarRef = useRef(null);
+
   const handleDeleteEvent = (eventId) => {
     setEvents(events.filter(e => e.id !== eventId));
     setShowForm(false);
   };
+
+  // Function to find the scrollable container in react-big-calendar
+  const getScrollContainer = () => {
+    if (!calendarRef.current) return null;
+    
+    // Try multiple selectors as the structure might vary
+    const container = 
+      calendarRef.current.querySelector('.rbc-time-content') || 
+      calendarRef.current.querySelector('.rbc-time-view') ||
+      calendarRef.current.querySelector('.rbc-calendar');
+    
+    return container;
+  };
+
+  // Function to save current scroll position
+  const saveScrollPosition = () => {
+    const container = getScrollContainer();
+    if (container) {
+      setScrollPosition(container.scrollTop);
+    }
+  };
+
+  // Effect to restore scroll position when form is closed
+  useEffect(() => {
+    if (!showForm && scrollPosition !== 0) {
+      // Use a short timeout to ensure the DOM is updated
+      const timer = setTimeout(() => {
+        const container = getScrollContainer();
+        if (container) {
+          container.scrollTop = scrollPosition;
+        }
+      }, 50);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showForm, scrollPosition]);
 
   // Custom event display component
   const EventComponent = ({ event }) => (
@@ -74,12 +112,14 @@ const WeeklyView = () => {
 
   // Handler for clicking on an event
   const handleSelectEvent = (event) => {
+    saveScrollPosition();
     setSelectedEvent(event);
     setShowForm(true);
   };
 
   // Handler for selecting a time slot
   const handleSelectSlot = (slotInfo) => {
+    saveScrollPosition();
     setSelectedEvent(null);
     setSelectedSlot(slotInfo);
     setShowForm(true);
@@ -87,11 +127,15 @@ const WeeklyView = () => {
 
   // Handler for navigating between dates
   const handleNavigate = (newDate) => {
+    // Reset scroll position when navigating to a different date
+    setScrollPosition(0);
     setCurrentDate(newDate);
   };
 
   // Handler for changing the view (day, week)
   const handleViewChange = (view) => {
+    // Reset scroll position when changing view type
+    setScrollPosition(0);
     setCurrentView(view);
   };
 
@@ -113,6 +157,7 @@ const WeeklyView = () => {
         <h1 className="text-2xl font-semibold text-gray-800">Weekly Schedule</h1>
         <button
           onClick={() => {
+            saveScrollPosition();
             setSelectedEvent(null);
             setSelectedSlot({ start: new Date(), end: new Date() });
             setShowForm(true);
@@ -134,7 +179,7 @@ const WeeklyView = () => {
           />
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 h-[75vh]">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 h-[75vh]" ref={calendarRef}>
           <Calendar
             localizer={localizer}
             events={events}
