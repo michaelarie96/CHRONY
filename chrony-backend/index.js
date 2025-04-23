@@ -7,10 +7,9 @@ require('dotenv').config();
 const userRoutes = require('./api/user');  
 const eventRoutes = require('./api/event');
 
-
-
 const app = express();
 const PORT = 3000;
+
 
 
 mongoose.connect(process.env.mongoURI, 
