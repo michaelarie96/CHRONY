@@ -7,7 +7,7 @@ import './calendar.css';
 
 // for 24 hours time format
 const formats = {
-  timeGutterFormat: 'HH:mm',        // time gutter on the side
+  timeGutterFormat: 'HH:mm',
   eventTimeRangeFormat: ({ start, end }, culture, local) =>
     `${local.format(start, 'HH:mm', culture)} – ${local.format(end, 'HH:mm', culture)}`
 };
@@ -28,7 +28,12 @@ const initialEvents = [
     title: 'Introduction to CS Lecture',
     start: new Date(2025, 3, 21, 10, 0),  // April 21, 2025, 10:00 AM
     end: new Date(2025, 3, 21, 12, 0),    // April 21, 2025, 12:00 PM
-    type: 'fixed'
+    type: 'fixed',
+    recurrence: {
+      enabled: true,
+      frequency: 'weekly',
+      interval: 1
+    }
   },
   {
     id: 2,
@@ -154,7 +159,7 @@ const WeeklyView = () => {
   return (
     <div className="container mx-auto px-4 py-6 max-w-full">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">Weekly Schedule</h1>
+        <h1 className="text-2xl font-semibold text-gray-800">Schedule</h1>
         <button
           onClick={() => {
             saveScrollPosition();
