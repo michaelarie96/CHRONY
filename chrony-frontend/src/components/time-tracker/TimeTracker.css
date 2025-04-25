@@ -1,0 +1,41 @@
+.time-tracker .active-timer {
+    animation: pulse 2s infinite;
+  }
+  
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(0, 129, 167, 0.2);
+    }
+    70% {
+      box-shadow: 0 0 0 8px rgba(0, 129, 167, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(0, 129, 167, 0);
+    }
+  }
+  
+  .time-entry-list .duration {
+    font-variant-numeric: tabular-nums;
+  }
+  
+  .time-tracker input[type="time"],
+  .time-tracker input[type="date"] {
+    min-height: 38px;
+  }
+  
+  /* Mobile optimizations */
+  @media (max-width: 640px) {
+    .time-tracker .timer-controls {
+      flex-direction: column;
+    }
+    
+    .time-tracker .entry-item {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    
+    .time-tracker .entry-item .actions {
+      margin-top: 8px;
+      justify-content: flex-start;
+    }
+  }

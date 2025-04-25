@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import WeeklyView from './components/calendar/WeeklyView';
+import TimeTracker from './components/time-tracker/TimeTracker';
 import Sidebar from './components/common/Sidebar';
 import AuthPage from './components/auth/AuthPage';
 
@@ -35,7 +36,7 @@ function App() {
       case 'calendar':
         return <WeeklyView />;
       case 'time-tracker':
-        return <div className="p-4"><h2 className="text-xl font-semibold">Time Tracker</h2><p>Time tracker functionality coming soon</p></div>;
+        return <TimeTracker />;
       case 'analytics':
         return <div className="p-4"><h2 className="text-xl font-semibold">Analytics</h2><p>Analytics functionality coming soon</p></div>;
       default:

@@ -1,5 +1,4 @@
 import React from 'react';
-import { useState } from 'react';
 
 const Sidebar = ({ activeItem, onItemClick }) => {
   const menuItems = [
@@ -38,15 +37,4 @@ const Sidebar = ({ activeItem, onItemClick }) => {
   );
 };
 
-// Example usage component
-const AppWithSidebar = () => {
-  const [activeItem, setActiveItem] = useState('calendar');
-  
-  return (
-    <div className="flex">
-      <Sidebar activeItem={activeItem} onItemClick={setActiveItem} />
-    </div>
-  );
-};
-
-export default AppWithSidebar;
+export default Sidebar;
