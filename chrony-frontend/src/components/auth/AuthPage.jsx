@@ -30,7 +30,7 @@ const AuthPage = ({ onLoginSuccess }) => {
 
       if (isLogin) {
         // Save user info 
-        localStorage.setItem('user', JSON.stringify({ username: data.username }));
+        localStorage.setItem('user', JSON.stringify({ username: data.username , userId: data.userId}));
         onLoginSuccess(data.username);
       } else {
         setIsLogin(true);
