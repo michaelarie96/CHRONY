@@ -6,6 +6,7 @@ require('dotenv').config();
 // user-created modules
 const userRoutes = require('./api/user');  
 const eventRoutes = require('./api/event');
+const timeEntryRoutes = require('./api/timeEntry');
 
 const app = express();
 const PORT = 3000;
@@ -24,13 +25,14 @@ app.use(express.json()); // this is needed to parse from req.body
 // this tells the app what to do with the routing 
 app.use('/api/events', eventRoutes); 
 app.use('/api/user', userRoutes); 
+app.use('/api/timeEntries', timeEntryRoutes);
 
-app.get('/', (req, res) => {
+app.get('/', (res) => {
     res.send('Backend is working!');
 });
 
 // pinging to frontend .
-app.get('/api/ping', (req, res) => {
+app.get('/api/ping', (res) => {
     console.log('Frontend hit the backend at /api/ping');
     res.json({ message: 'Pong from backend' });
   });
