@@ -52,6 +52,14 @@ timeEntrySchema.pre('save', function(next) {
   next();
 });
 
+// Pre-validation hook to ensure that a running time entry cannot have an end date
+timeEntrySchema.pre('validate', function(next) {
+  if (this.isRunning && this.end) {
+    this.invalidate('end', 'A running time entry cannot have an end time');
+  }
+  next();
+});
+
 // Pre-save hook to calculate duration if end date is present
 timeEntrySchema.pre('save', function(next) {
   if (this.start && this.end && !this.isRunning) {
