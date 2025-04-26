@@ -7,7 +7,7 @@ require('dotenv').config();
 // user-created modules
 const userRoutes = require('./api/user-api');  
 const eventRoutes = require('./api/event-api');
-const timeEntryRoutes = require('./api/timeEntry');
+const timeEntryRoutes = require('./api/timeEntry-api');
 
 const app = express();
 const PORT = 3000;
