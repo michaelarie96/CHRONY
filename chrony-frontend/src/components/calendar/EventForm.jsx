@@ -7,19 +7,21 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
     const [start, setStart] = useState(event?.start || new Date());
     const [end, setEnd] = useState(event?.end || new Date());
     const [type, setType] = useState(event?.type || 'fixed');
+    const [description, setDescription] = useState(event?.description || '');
     
     // State for expandable sections
     const [showDescription, setShowDescription] = useState(!!event?.description);
-    const [description, setDescription] = useState(event?.description || '');
+    const [showRecurrence, setShowRecurrence] = useState(!!event?.recurrence?.enabled);
     
-    const [showRecurrence, setShowRecurrence] = useState(!!event?.recurrence);
     const [recurrence, setRecurrence] = useState(event?.recurrence || { 
         enabled: false, 
         frequency: 'weekly', 
-        interval: 1 
+        interval: 1,
+        exceptions: []
     });
     
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteRecurringOption, setDeleteRecurringOption] = useState('single');
 
     const eventTypes = {
         fixed: { name: "Fixed", color: "#0081A7", bgColor: "#0081A720" },
@@ -29,15 +31,18 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        onSave({
+        
+        const eventData = {
             id: event?.id || Date.now(),
             title,
             start,
             end,
             type,
             description,
-            ...(recurrence.enabled ? { recurrence } : {})
-        });
+            recurrence: showRecurrence ? recurrence : { enabled: false }
+        };
+        
+        onSave(eventData);
     };
 
     const handleRecurrenceChange = (field, value) => {
@@ -45,6 +50,20 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
             ...recurrence,
             [field]: value
         });
+    };
+
+    const handleDeleteClick = () => {
+        // If this is a recurring event instance
+        if (event?.recurrence?.enabled) {
+            setShowDeleteConfirm(true);
+        } else {
+            // Regular event deletion
+            onDelete(event.id);
+        }
+    };
+
+    const confirmDelete = () => {
+        onDelete(event.id, deleteRecurringOption === 'all');
     };
 
     return (
@@ -158,6 +177,31 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
                                         </span>
                                     </div>
                                 </div>
+                                
+                                {/* Display exceptions if any exist */}
+                                {recurrence.exceptions && recurrence.exceptions.length > 0 && (
+                                    <div>
+                                        <label className="block mb-1 text-sm">Exceptions</label>
+                                        <div className="text-xs text-gray-600">
+                                            {recurrence.exceptions.map((exception, index) => (
+                                                <div key={index} className="flex items-center mb-1">
+                                                    <span>{moment(exception).format('MMM D, YYYY')}</span>
+                                                    <button 
+                                                        type="button"
+                                                        className="ml-2 text-red-500 hover:text-red-700"
+                                                        onClick={() => {
+                                                            const newExceptions = [...recurrence.exceptions];
+                                                            newExceptions.splice(index, 1);
+                                                            handleRecurrenceChange('exceptions', newExceptions);
+                                                        }}
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -201,21 +245,48 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
                 <div className="mt-4">
                     <button
                         type="button"
-                        onClick={() => setShowDeleteConfirm(true)}
+                        onClick={handleDeleteClick}
                         className="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 transition"
                     >
                         Delete Event
                     </button>
+                    
                     {showDeleteConfirm && (
                         <div className="mt-4 bg-red-50 border border-red-200 p-4 rounded">
-                            <p className="text-red-700 font-medium mb-2">Are you sure you want to delete this event?</p>
+                            <p className="text-red-700 font-medium mb-2">
+                                This is a recurring event. What would you like to delete?
+                            </p>
+                            <div className="space-y-2 mb-3">
+                                <label className="flex items-center">
+                                    <input
+                                        type="radio"
+                                        name="deleteOption"
+                                        value="single"
+                                        checked={deleteRecurringOption === 'single'}
+                                        onChange={() => setDeleteRecurringOption('single')}
+                                        className="mr-2"
+                                    />
+                                    <span>This instance only</span>
+                                </label>
+                                <label className="flex items-center">
+                                    <input
+                                        type="radio"
+                                        name="deleteOption"
+                                        value="all"
+                                        checked={deleteRecurringOption === 'all'}
+                                        onChange={() => setDeleteRecurringOption('all')}
+                                        className="mr-2"
+                                    />
+                                    <span>All instances</span>
+                                </label>
+                            </div>
                             <div className="flex space-x-2">
                                 <button
                                     type="button"
                                     className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-                                    onClick={() => onDelete(event.id)}
+                                    onClick={confirmDelete}
                                 >
-                                    Yes, Delete
+                                    Delete
                                 </button>
                                 <button
                                     type="button"
