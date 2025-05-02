@@ -177,94 +177,6 @@ const WeeklyView = () => {
     fetchUserEvents();
   }, [currentDate, currentView]);
 
-  const handleDeleteEvent = async (eventId, deleteAll = false) => {
-    try {
-      const event = selectedEvent;
-      const isRecurringInstance = event.isRecurringInstance;
-
-      // If it's a recurring instance, we need to add an exception to the parent event
-      if (isRecurringInstance && !deleteAll) {
-        const originalEventId = event.originalEventId;
-        const instanceDate = moment(event.start).format("YYYY-MM-DD");
-
-        const response = await fetch(
-          `http://localhost:3000/api/event/${originalEventId}/exception`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ exceptionDate: instanceDate }),
-          }
-        );
-
-        if (response.ok) {
-          console.log("Exception added for recurring event instance");
-          // Update the local events list with the exception
-          const updatedEvents = events.map((e) => {
-            if (e.id === originalEventId) {
-              if (!e.recurrence.exceptions) {
-                e.recurrence.exceptions = [];
-              }
-              e.recurrence.exceptions.push(new Date(instanceDate));
-              return e;
-            }
-            return e;
-          });
-
-          setEvents(updatedEvents);
-        } else {
-          console.error("Failed to add exception");
-        }
-      } else {
-        // For regular events or when deleting all recurring instances
-        const idToDelete = isRecurringInstance
-          ? event.originalEventId
-          : eventId;
-        const response = await fetch(
-          `http://localhost:3000/api/event/${idToDelete}${
-            deleteAll ? "?deleteAll=true" : ""
-          }`,
-          {
-            method: "DELETE",
-          }
-        );
-
-        if (response.ok) {
-          console.log("Event deleted successfully");
-          // Remove deleted event from the local events state
-          setEvents((prevEvents) =>
-            prevEvents.filter(
-              (event) =>
-                !(
-                  event.id === idToDelete ||
-                  event.originalEventId === idToDelete
-                )
-            )
-          );
-        } else {
-          console.error("Failed to delete event");
-        }
-      }
-    } catch (error) {
-      console.error("Error deleting event:", error);
-    }
-
-    setShowForm(false); // Close the event form after delete
-  };
-
-  // Function to find the scrollable container in react-big-calendar
-  const getScrollContainer = () => {
-    if (!calendarRef.current) return null;
-
-    // Try multiple selectors as the structure might vary
-    const container =
-      calendarRef.current.querySelector(".rbc-time-content") ||
-      calendarRef.current.querySelector(".rbc-time-view") ||
-      calendarRef.current.querySelector(".rbc-calendar");
-
-    return container;
-  };
 
   const handleSaveEvent = async (eventData) => {
     try {
@@ -360,6 +272,95 @@ const WeeklyView = () => {
     }
 
     setShowForm(false); // Close form after save
+  };
+
+  const handleDeleteEvent = async (eventId, deleteAll = false) => {
+    try {
+      const event = selectedEvent;
+      const isRecurringInstance = event.isRecurringInstance;
+
+      // If it's a recurring instance, we need to add an exception to the parent event
+      if (isRecurringInstance && !deleteAll) {
+        const originalEventId = event.originalEventId;
+        const instanceDate = moment(event.start).format("YYYY-MM-DD");
+
+        const response = await fetch(
+          `http://localhost:3000/api/event/${originalEventId}/exception`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ exceptionDate: instanceDate }),
+          }
+        );
+
+        if (response.ok) {
+          console.log("Exception added for recurring event instance");
+          // Update the local events list with the exception
+          const updatedEvents = events.map((e) => {
+            if (e.id === originalEventId) {
+              if (!e.recurrence.exceptions) {
+                e.recurrence.exceptions = [];
+              }
+              e.recurrence.exceptions.push(new Date(instanceDate));
+              return e;
+            }
+            return e;
+          });
+
+          setEvents(updatedEvents);
+        } else {
+          console.error("Failed to add exception");
+        }
+      } else {
+        // For regular events or when deleting all recurring instances
+        const idToDelete = isRecurringInstance
+          ? event.originalEventId
+          : eventId;
+        const response = await fetch(
+          `http://localhost:3000/api/event/${idToDelete}${
+            deleteAll ? "?deleteAll=true" : ""
+          }`,
+          {
+            method: "DELETE",
+          }
+        );
+
+        if (response.ok) {
+          console.log("Event deleted successfully");
+          // Remove deleted event from the local events state
+          setEvents((prevEvents) =>
+            prevEvents.filter(
+              (event) =>
+                !(
+                  event.id === idToDelete ||
+                  event.originalEventId === idToDelete
+                )
+            )
+          );
+        } else {
+          console.error("Failed to delete event");
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting event:", error);
+    }
+
+    setShowForm(false); // Close the event form after delete
+  };
+
+  // Function to find the scrollable container in react-big-calendar
+  const getScrollContainer = () => {
+    if (!calendarRef.current) return null;
+
+    // Try multiple selectors as the structure might vary
+    const container =
+      calendarRef.current.querySelector(".rbc-time-content") ||
+      calendarRef.current.querySelector(".rbc-time-view") ||
+      calendarRef.current.querySelector(".rbc-calendar");
+
+    return container;
   };
 
   // Function to save current scroll position
