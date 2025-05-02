@@ -1,26 +1,5 @@
 const mongoose = require('mongoose');
 
-const recurrenceSchema = new mongoose.Schema({
-  enabled: {
-    type: Boolean,
-    default: false
-  },
-  frequency: {
-    type: String,
-    enum: ['daily', 'weekly', 'monthly'],
-    default: 'weekly'
-  },
-  interval: {
-    type: Number,
-    default: 1,
-    min: 1
-  },
-  exceptions: {
-    type: [Date],  // Array of dates when the event doesn't occur
-    default: []
-  }
-});
-
 const eventSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -44,9 +23,26 @@ const eventSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  recurrence: {
-    type: recurrenceSchema,
+  isRecurringInstance: {
+    type: Boolean,
+    default: false
+  },
+  recurrenceGroupId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'recurrenceGroup',
     default: null
+  },
+  recurrencePosition: {
+    type: Number,
+    default: 0
+  },
+  isException: {
+    type: Boolean,
+    default: false
+  },
+  modifiedProperties: {
+    type: Object,
+    default: {}
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -69,4 +65,4 @@ eventSchema.pre('save', function(next) {
   next();
 });
 
-module.exports = mongoose.model('event', eventSchema); // 'event' is the collection name
+module.exports = mongoose.model('event', eventSchema);
