@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import moment from 'moment';
 import TimerControls from './TimerControls';
 import TimeEntryList from './TimeEntryList';
@@ -23,30 +23,45 @@ const TimeTracker = () => {
   // Timer interval reference
   const timerRef = useRef(null);
 
-  // Fetch events from the API and load saved time entries
-  useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        const response = await fetch('/api/events');
-        if (response.ok) {
-          const eventsData = await response.json();
-          // Parse date strings into Date objects
-          const parsedEvents = eventsData.map(event => ({
-            ...event,
-            start: new Date(event.start),
-            end: new Date(event.end)
-          }));
-          setEvents(parsedEvents);
-        } else {
-          console.error('Failed to fetch events');
-        }
-      } catch (error) {
-        console.error('Error fetching events:', error);
-      } finally {
-        setLoading(false);
+  // Function to fetch events from backend
+  const fetchEvents = useCallback(async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (!user || !user.userId) {
+        console.error("No user found in localStorage");
+        return;
       }
-    };
 
+      // Fetch events for a wider date range to include past and future events
+      const startDate = moment().subtract(1, 'week').toISOString();
+      const endDate = moment().add(2, 'weeks').toISOString();
+
+      const response = await fetch(
+        `http://localhost:3000/api/event?userId=${user.userId}&start=${startDate}&end=${endDate}`
+      );
+      
+      if (response.ok) {
+        const eventsData = await response.json();
+        // Parse date strings into Date objects
+        const parsedEvents = eventsData.map(event => ({
+          ...event,
+          id: event._id || event.id,
+          start: new Date(event.start),
+          end: new Date(event.end)
+        }));
+        setEvents(parsedEvents);
+      } else {
+        console.error('Failed to fetch events');
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch events and load saved time entries
+  useEffect(() => {
     // Fetch time entries from API (would be implemented in future)
     // For now, we'll use localStorage just for the prototype
     const loadTimeEntries = () => {
@@ -61,6 +76,33 @@ const TimeTracker = () => {
       }
     };
 
+    // Local startTimer function to avoid dependency issues
+    const initializeTimer = (description = '', category = null, eventId = null) => {
+      // Create a new timer
+      const newEntry = {
+        id: Date.now(),
+        description: description,
+        category: category,
+        eventId: eventId,
+        start: new Date(),
+        end: null,
+        duration: 0,
+        isRunning: true
+      };
+
+      setActiveEntry(newEntry);
+      
+      // Update the timer every second
+      timerRef.current = setInterval(() => {
+        setActiveEntry(current => {
+          if (!current) return null;
+          
+          const duration = moment().diff(moment(current.start), 'seconds');
+          return { ...current, duration };
+        });
+      }, 1000);
+    };
+
     // Load active timer if it exists
     const loadActiveTimer = () => {
       const activeTimerData = localStorage.getItem('activeTimer');
@@ -68,7 +110,7 @@ const TimeTracker = () => {
         const parsedTimer = JSON.parse(activeTimerData);
         parsedTimer.start = new Date(parsedTimer.start);
         setActiveEntry(parsedTimer);
-        startTimer(parsedTimer.description, parsedTimer.category, parsedTimer.eventId);
+        initializeTimer(parsedTimer.description, parsedTimer.category, parsedTimer.eventId);
       }
     };
 
@@ -82,7 +124,7 @@ const TimeTracker = () => {
         clearInterval(timerRef.current);
       }
     };
-  }, []);
+  }, [fetchEvents]);
 
   // Save time entries to localStorage whenever they change
   useEffect(() => {
@@ -237,7 +279,7 @@ const TimeTracker = () => {
           <h3 className="text-2xl font-semibold">{formatTime(calculateDailyTotal())}</h3>
         </div>
 
-        {/* Timer controls */}
+        {/* Timer controls - now pass events as props */}
         <TimerControls 
           activeEntry={activeEntry} 
           onStart={startTimer} 

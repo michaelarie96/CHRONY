@@ -194,7 +194,7 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
                 {relevantEvents.length > 0 ? (
                   relevantEvents.map(event => (
                     <option key={event._id || event.id} value={event._id || event.id}>
-                      {event.title}
+                      {event.title} ({moment(event.start).format('HH:mm')})
                     </option>
                   ))
                 ) : (
