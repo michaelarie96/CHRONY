@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import moment from 'moment';
 
 const TimeEntryForm = ({ entry, events, onSave, onCancel, onDelete }) => {
+  console.log('Entry received in form:', entry);
+  console.log('Events received in form:', events);
+
   const [title, setTitle] = useState('');
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('');
@@ -38,7 +41,7 @@ const TimeEntryForm = ({ entry, events, onSave, onCancel, onDelete }) => {
       }
       
       setCategory(entry.category || '');
-      setEventId(entry.eventId || '');
+      setEventId(entry.eventId?._id || entry.eventId || '');
     } else {
       // Default to current time for new entries
       const now = moment();
@@ -184,7 +187,7 @@ const TimeEntryForm = ({ entry, events, onSave, onCancel, onDelete }) => {
             <option value="">No linked event</option>
             {events.map(event => (
               <option key={event._id || event.id} value={event._id || event.id}>
-                {event.title}
+                {event.title} ({moment(event.start).format('MMM D, HH:mm')})
               </option>
             ))}
           </select>
