@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import moment from 'moment';
 
 const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -67,10 +67,10 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
 
   // Handle starting the timer
   const handleStart = () => {
-    onStart(description, category, selectedEventId || null);
+    onStart(title, category, selectedEventId || null);
     
     // Clear the form
-    setDescription('');
+    setTitle('');
     setCategory('');
     setSelectedEventId('');
   };
@@ -81,10 +81,10 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
     setSelectedEventId(eventId);
     
     if (eventId) {
-      // If an event is selected, use its title as the description
+      // If an event is selected, use its title as the title
       const selectedEvent = events.find(event => event._id === eventId || event.id === eventId);
       if (selectedEvent) {
-        setDescription(selectedEvent.title);
+        setTitle(selectedEvent.title);
       }
     }
   };
@@ -96,7 +96,7 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
         <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
             <div className="flex-1">
-              <h3 className="font-medium text-lg mb-1">{activeEntry.description || "Untitled"}</h3>
+              <h3 className="font-medium text-lg mb-1">{activeEntry.title || "Untitled"}</h3>
               <div className="flex items-center text-sm text-gray-600">
                 {activeEntry.category && (
                   <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded mr-2">
@@ -139,8 +139,8 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
                 type="text"
                 placeholder="What are you working on?"
                 className="w-full border border-gray-300 rounded px-3 py-2"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
               />
             </div>
             
@@ -207,7 +207,7 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
           <button 
             onClick={handleStart}
             className="bg-[#00AFB9] w-full md:w-auto text-white px-6 py-2 rounded hover:bg-[#0081A7] transition-colors"
-            disabled={!description}
+            disabled={!title}
           >
             Start Timer
           </button>

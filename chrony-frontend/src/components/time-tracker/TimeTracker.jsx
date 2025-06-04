@@ -6,24 +6,100 @@ import TimeEntryForm from './TimeEntryForm';
 import './TimeTracker.css';
 
 const TimeTracker = () => {
-  // State for time entries (all past and current time tracking records)
   const [timeEntries, setTimeEntries] = useState([]);
-  
-  // State for the currently running timer
   const [activeEntry, setActiveEntry] = useState(null);
-  
-  // State for the form when adding/editing entries
   const [showForm, setShowForm] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
-  
-  // State for handling events from the calendar
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Timer interval reference
   const timerRef = useRef(null);
 
-  // Function to fetch events from backend
+  // Fetch time entries from backend
+  const fetchTimeEntries = useCallback(async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (!user || !user.userId) {
+        console.error("No user found in localStorage");
+        return;
+      }
+
+      const response = await fetch(
+        `http://localhost:3000/api/timeEntries/user/${user.userId}`
+      );
+      
+      if (response.ok) {
+        const entriesData = await response.json();
+        console.log('Fetched time entries:', entriesData);
+        
+        const parsedEntries = entriesData.map(entry => ({
+          id: entry._id,
+          title: entry.title,
+          category: entry.category,
+          eventId: entry.event,
+          start: new Date(entry.start),
+          end: entry.end ? new Date(entry.end) : null,
+          duration: entry.duration,
+          isRunning: entry.isRunning
+        }));
+        
+        setTimeEntries(parsedEntries);
+      } else {
+        console.error('Failed to fetch time entries');
+      }
+    } catch (error) {
+      console.error('Error fetching time entries:', error);
+    }
+  }, []);
+
+  // Fetch active time entry from backend
+  const fetchActiveEntry = useCallback(async () => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (!user || !user.userId) {
+        return;
+      }
+
+      const response = await fetch(
+        `http://localhost:3000/api/timeEntries/active/${user.userId}`
+      );
+      
+      if (response.ok) {
+        const activeData = await response.json();
+        console.log('Found active timer:', activeData);
+        
+        const activeTimer = {
+          id: activeData._id,
+          title: activeData.title,
+          category: activeData.category,
+          eventId: activeData.event,
+          start: new Date(activeData.start),
+          end: null,
+          duration: activeData.duration || 0,
+          isRunning: true
+        };
+        
+        setActiveEntry(activeTimer);
+        
+        timerRef.current = setInterval(() => {
+          setActiveEntry(current => {
+            if (!current) return null;
+            const duration = moment().diff(moment(current.start), 'seconds');
+            return { ...current, duration };
+          });
+        }, 1000);
+        
+      } else if (response.status === 404) {
+        console.log('No active timer found');
+      } else {
+        console.error('Failed to fetch active entry');
+      }
+    } catch (error) {
+      console.error('Error fetching active entry:', error);
+    }
+  }, []);
+
+  // Fetch events from backend
   const fetchEvents = useCallback(async () => {
     try {
       const user = JSON.parse(localStorage.getItem("user"));
@@ -32,7 +108,6 @@ const TimeTracker = () => {
         return;
       }
 
-      // Fetch events for a wider date range to include past and future events
       const startDate = moment().subtract(1, 'week').toISOString();
       const endDate = moment().add(2, 'weeks').toISOString();
 
@@ -42,7 +117,6 @@ const TimeTracker = () => {
       
       if (response.ok) {
         const eventsData = await response.json();
-        // Parse date strings into Date objects
         const parsedEvents = eventsData.map(event => ({
           ...event,
           id: event._id || event.id,
@@ -60,142 +134,125 @@ const TimeTracker = () => {
     }
   }, []);
 
-  // Fetch events and load saved time entries
+  // Load all data on component mount
   useEffect(() => {
-    // Fetch time entries from API (would be implemented in future)
-    // For now, we'll use localStorage just for the prototype
-    const loadTimeEntries = () => {
-      const savedEntries = localStorage.getItem('timeEntries');
-      if (savedEntries) {
-        const parsedEntries = JSON.parse(savedEntries).map(entry => ({
-          ...entry,
-          start: entry.start ? new Date(entry.start) : null,
-          end: entry.end ? new Date(entry.end) : null
-        }));
-        setTimeEntries(parsedEntries);
-      }
+    const loadData = async () => {
+      await Promise.all([
+        fetchTimeEntries(),
+        fetchActiveEntry(),
+        fetchEvents()
+      ]);
     };
 
-    // Local startTimer function to avoid dependency issues
-    const initializeTimer = (description = '', category = null, eventId = null) => {
-      // Create a new timer
-      const newEntry = {
-        id: Date.now(),
-        description: description,
-        category: category,
-        eventId: eventId,
-        start: new Date(),
-        end: null,
-        duration: 0,
-        isRunning: true
-      };
+    loadData();
 
-      setActiveEntry(newEntry);
-      
-      // Update the timer every second
-      timerRef.current = setInterval(() => {
-        setActiveEntry(current => {
-          if (!current) return null;
-          
-          const duration = moment().diff(moment(current.start), 'seconds');
-          return { ...current, duration };
-        });
-      }, 1000);
-    };
-
-    // Load active timer if it exists
-    const loadActiveTimer = () => {
-      const activeTimerData = localStorage.getItem('activeTimer');
-      if (activeTimerData) {
-        const parsedTimer = JSON.parse(activeTimerData);
-        parsedTimer.start = new Date(parsedTimer.start);
-        setActiveEntry(parsedTimer);
-        initializeTimer(parsedTimer.description, parsedTimer.category, parsedTimer.eventId);
-      }
-    };
-
-    fetchEvents();
-    loadTimeEntries();
-    loadActiveTimer();
-
-    // Cleanup timer on unmount
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
     };
-  }, [fetchEvents]);
-
-  // Save time entries to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('timeEntries', JSON.stringify(timeEntries));
-  }, [timeEntries]);
-
-  // Save active timer to localStorage whenever it changes
-  useEffect(() => {
-    if (activeEntry) {
-      localStorage.setItem('activeTimer', JSON.stringify(activeEntry));
-    } else {
-      localStorage.removeItem('activeTimer');
-    }
-  }, [activeEntry]);
+  }, [fetchTimeEntries, fetchActiveEntry, fetchEvents]);
 
   // Start the timer
-  const startTimer = (description = '', category = null, eventId = null) => {
-    // Stop any current timer first
-    if (activeEntry) {
-      stopTimer();
-    }
+  const startTimer = async (title = '', category = null, eventId = null) => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (!user || !user.userId) {
+        console.error("No user found");
+        return;
+      }
 
-    // Create a new timer
-    const newEntry = {
-      id: Date.now(),
-      description: description,
-      category: category,
-      eventId: eventId, // Connection to calendar event
-      start: new Date(),
-      end: null,
-      duration: 0,
-      isRunning: true
-    };
+      // Stop any current timer first
+      if (activeEntry) {
+        await stopTimer();
+      }
 
-    setActiveEntry(newEntry);
-    
-    // Update the timer every second
-    timerRef.current = setInterval(() => {
-      setActiveEntry(current => {
-        if (!current) return null;
-        
-        const duration = moment().diff(moment(current.start), 'seconds');
-        return { ...current, duration };
+      const timeEntryData = {
+        title,
+        category,
+        event: eventId,
+        user: user.userId,
+        start: new Date(),
+        isRunning: true
+      };
+
+      const response = await fetch('http://localhost:3000/api/timeEntries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(timeEntryData),
       });
-    }, 1000);
+
+      if (response.ok) {
+        const createdEntry = await response.json();
+        console.log('Timer started:', createdEntry);
+
+        const newActiveEntry = {
+          id: createdEntry._id,
+          title: createdEntry.title,
+          category: createdEntry.category,
+          eventId: createdEntry.event,
+          start: new Date(createdEntry.start),
+          end: null,
+          duration: 0,
+          isRunning: true
+        };
+
+        setActiveEntry(newActiveEntry);
+
+        timerRef.current = setInterval(() => {
+          setActiveEntry(current => {
+            if (!current) return null;
+            const duration = moment().diff(moment(current.start), 'seconds');
+            return { ...current, duration };
+          });
+        }, 1000);
+      } else {
+        console.error('Failed to start timer');
+      }
+    } catch (error) {
+      console.error('Error starting timer:', error);
+    }
   };
 
   // Stop the current timer
-  const stopTimer = () => {
+  const stopTimer = async () => {
     if (!activeEntry) return;
 
-    clearInterval(timerRef.current);
-    
-    const endTime = new Date();
-    const duration = moment(endTime).diff(moment(activeEntry.start), 'seconds');
-    
-    const completedEntry = {
-      ...activeEntry,
-      end: endTime,
-      duration,
-      isRunning: false
-    };
+    try {
+      clearInterval(timerRef.current);
 
-    // Add the completed entry to the list
-    setTimeEntries([completedEntry, ...timeEntries]);
-    
-    // Clear the active timer
-    setActiveEntry(null);
+      const response = await fetch(
+        `http://localhost:3000/api/timeEntries/stop/${activeEntry.id}`,
+        {
+          method: 'PUT',
+        }
+      );
 
-    // In future, we would also send this entry to our API
-    // saveTimeEntryToAPI(completedEntry);
+      if (response.ok) {
+        const stoppedEntry = await response.json();
+        console.log('Timer stopped:', stoppedEntry);
+
+        const completedEntry = {
+          id: stoppedEntry._id,
+          title: stoppedEntry.title,
+          category: stoppedEntry.category,
+          eventId: stoppedEntry.event,
+          start: new Date(stoppedEntry.start),
+          end: new Date(stoppedEntry.end),
+          duration: stoppedEntry.duration,
+          isRunning: false
+        };
+
+        setTimeEntries(prev => [completedEntry, ...prev]);
+        setActiveEntry(null);
+      } else {
+        console.error('Failed to stop timer');
+      }
+    } catch (error) {
+      console.error('Error stopping timer:', error);
+    }
   };
 
   // Handle editing an entry
@@ -205,34 +262,81 @@ const TimeTracker = () => {
   };
 
   // Handle saving an entry (new or edited)
-  const handleSaveEntry = (entryData) => {
-    if (selectedEntry) {
-      // Update existing entry
-      setTimeEntries(timeEntries.map(entry => 
-        entry.id === selectedEntry.id ? entryData : entry
-      ));
-    } else {
-      // Add new manual entry
-      setTimeEntries([entryData, ...timeEntries]);
+  const handleSaveEntry = async (entryData) => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (!user || !user.userId) {
+        console.error("No user found");
+        return;
+      }
+
+      const backendData = {
+        title: entryData.title,
+        start: entryData.start,
+        end: entryData.end,
+        duration: entryData.duration,
+        category: entryData.category,
+        event: entryData.eventId,
+        user: user.userId,
+        isRunning: false
+      };
+
+      let response;
+      if (selectedEntry) {
+        // Update existing entry
+        response = await fetch(
+          `http://localhost:3000/api/timeEntries/${selectedEntry.id}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(backendData),
+          }
+        );
+      } else {
+        // Create new entry
+        response = await fetch('http://localhost:3000/api/timeEntries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(backendData),
+        });
+      }
+
+      if (response.ok) {
+        console.log('Entry saved successfully');
+        await fetchTimeEntries(); // Refresh the list
+      } else {
+        console.error('Failed to save entry');
+      }
+    } catch (error) {
+      console.error('Error saving entry:', error);
     }
+
     setShowForm(false);
     setSelectedEntry(null);
-
-    // In future, we would also update this in our API
-    // saveTimeEntryToAPI(entryData);
   };
 
   // Handle deleting an entry
-  const handleDeleteEntry = (entryId) => {
-    setTimeEntries(timeEntries.filter(entry => entry.id !== entryId));
-    
+  const handleDeleteEntry = async (entryId) => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/timeEntries/${entryId}`,
+        { method: 'DELETE' }
+      );
+
+      if (response.ok) {
+        console.log('Entry deleted successfully');
+        setTimeEntries(prev => prev.filter(entry => entry.id !== entryId));
+      } else {
+        console.error('Failed to delete entry');
+      }
+    } catch (error) {
+      console.error('Error deleting entry:', error);
+    }
+
     if (showForm) {
       setShowForm(false);
       setSelectedEntry(null);
     }
-
-    // In future, we would also delete this from our API
-    // deleteTimeEntryFromAPI(entryId);
   };
 
   // Calculate today's total time
@@ -245,7 +349,6 @@ const TimeTracker = () => {
     
     const totalSeconds = todayEntries.reduce((total, entry) => total + entry.duration, 0);
     
-    // Add active timer if it's running today
     if (activeEntry && moment(activeEntry.start).isSame(today, 'day')) {
       return totalSeconds + activeEntry.duration;
     }
@@ -273,13 +376,11 @@ const TimeTracker = () => {
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Time Tracker</h2>
         
-        {/* Daily total time counter */}
         <div className="mb-6">
           <p className="text-sm text-gray-500 mb-1">Today's total</p>
           <h3 className="text-2xl font-semibold">{formatTime(calculateDailyTotal())}</h3>
         </div>
 
-        {/* Timer controls - now pass events as props */}
         <TimerControls 
           activeEntry={activeEntry} 
           onStart={startTimer} 
@@ -319,7 +420,6 @@ const TimeTracker = () => {
         </div>
       )}
 
-      {/* Time entries list */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-lg font-medium mb-4">Time Entries</h3>
         <TimeEntryList 
@@ -327,7 +427,7 @@ const TimeTracker = () => {
           activeEntry={activeEntry}
           onEdit={handleEditEntry}
           onDelete={handleDeleteEntry}
-          onContinue={(entry) => startTimer(entry.description, entry.category, entry.eventId)}
+          onContinue={(entry) => startTimer(entry.title, entry.category, entry.eventId)}
           getEventForEntry={getEventForEntry}
         />
       </div>

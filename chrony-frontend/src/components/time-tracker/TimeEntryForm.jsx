@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import moment from 'moment';
 
 const TimeEntryForm = ({ entry, events, onSave, onCancel, onDelete }) => {
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useState('');
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -15,7 +15,7 @@ const TimeEntryForm = ({ entry, events, onSave, onCancel, onDelete }) => {
   // Load form data when entry changes
   useEffect(() => {
     if (entry) {
-      setDescription(entry.description || '');
+      setTitle(entry.title || '');
       
       if (entry.start) {
         const start = moment(entry.start);
@@ -75,7 +75,7 @@ const TimeEntryForm = ({ entry, events, onSave, onCancel, onDelete }) => {
     
     const updatedEntry = {
       id: entry?.id || Date.now(),
-      description,
+      title,
       category,
       eventId: eventId || null,
       start,
@@ -96,8 +96,8 @@ const TimeEntryForm = ({ entry, events, onSave, onCancel, onDelete }) => {
         <input 
           type="text"
           className="w-full border border-gray-300 rounded px-3 py-2"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
           required
         />
       </div>

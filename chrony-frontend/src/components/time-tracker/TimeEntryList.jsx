@@ -64,7 +64,7 @@ const TimeEntryList = ({ entries, activeEntry, onEdit, onDelete, onContinue, get
                     >
                       <div className="flex justify-between">
                         <div>
-                          <div className="font-medium">{entry.description || "Untitled"}</div>
+                          <div className="font-medium">{entry.title || "Untitled"}</div>
                           <div className="text-sm text-gray-600 flex flex-wrap gap-2 mt-1">
                             {entry.category && (
                               <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">
@@ -125,7 +125,7 @@ const TimeEntryList = ({ entries, activeEntry, onEdit, onDelete, onContinue, get
             >
               <div className="flex justify-between">
                 <div>
-                  <div className="font-medium">{activeEntry.description || "Untitled"}</div>
+                  <div className="font-medium">{activeEntry.title || "Untitled"}</div>
                   <div className="text-sm text-gray-600 flex gap-2 mt-1">
                     {activeEntry.category && (
                       <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs">
