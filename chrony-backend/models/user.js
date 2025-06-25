@@ -39,6 +39,26 @@ const userSchema = new mongoose.Schema({
       default: 'saturday'
     }
   },
+    // User categories for time tracking
+  categories: [{
+    id: {
+      type: String,
+      required: true
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    color: {
+      type: String,
+      default: '#00AFB9'
+    },
+    created: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   created: {
     type: Date,
     default: Date.now

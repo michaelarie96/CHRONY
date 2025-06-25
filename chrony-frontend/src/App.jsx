@@ -5,31 +5,55 @@ import Analytics from "./components/analytics/Analytics";
 import Sidebar from "./components/common/Sidebar";
 import UserSettings from "./components/common/UserSettings";
 import AuthPage from "./components/auth/AuthPage";
+import SetupPage from "./components/auth/SetupPage";
 
 function App() {
   const [activeView, setActiveView] = useState("calendar");
   const [user, setUser] = useState(null);
+  const [needsSetup, setNeedsSetup] = useState(false);
 
-  // Check if user is logged in on component mount
+  // Check user authentication and setup status on component mount
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const userData = JSON.parse(storedUser);
+      setUser(userData);
+      
+      // Check if user has completed setup
+      const setupCompleted = userData.setupCompleted === true;
+      setNeedsSetup(!setupCompleted);
     }
   }, []);
 
-  const handleLoginSuccess = (username) => {
-    setUser({ username });
+  const handleLoginSuccess = (username, userId) => {
+    const newUser = { 
+      username, 
+      userId,
+      setupCompleted: false // New users always need setup
+    };
+    setUser(newUser);
+    setNeedsSetup(true); // Force setup for new login
+  };
+
+  const handleSetupComplete = (updatedUser) => {
+    setUser(updatedUser);
+    setNeedsSetup(false);
   };
 
   const handleLogout = () => {
     localStorage.removeItem("user");
     setUser(null);
+    setNeedsSetup(false);
   };
 
   // If user is not logged in, show auth page
   if (!user) {
     return <AuthPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // If user needs setup, show setup page
+  if (needsSetup) {
+    return <SetupPage user={user} onSetupComplete={handleSetupComplete} />;
   }
 
   // Render the appropriate component based on the active view

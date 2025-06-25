@@ -114,4 +114,159 @@ router.get('/settings/:userId', async (req, res) => {
   }
 });
 
+// Get user settings
+router.get('/settings/:userId', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.status(200).json({
+      settings: user.settings
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get user categories
+router.get('/categories/:userId', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.status(200).json({
+      categories: user.categories || []
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add a new category
+router.post('/categories', async (req, res) => {
+  const { userId, id, name, color } = req.body;
+  
+  try {
+    if (!userId || !id || !name) {
+      return res.status(400).json({ message: 'userId, id, and name are required' });
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Check if category with this ID already exists
+    const existingCategory = user.categories.find(cat => cat.id === id);
+    if (existingCategory) {
+      return res.status(409).json({ message: 'Category with this ID already exists' });
+    }
+    
+    // Add new category
+    const newCategory = {
+      id,
+      name: name.trim(),
+      color: color || '#00AFB9',
+      created: new Date()
+    };
+    
+    user.categories.push(newCategory);
+    await user.save();
+    
+    res.status(201).json({
+      message: 'Category added successfully',
+      category: newCategory,
+      categories: user.categories
+    });
+    
+    console.log(`Category added for user ${user.username}: ${name}`);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update a category
+router.put('/categories/:categoryId', async (req, res) => {
+  const { userId, name, color } = req.body;
+  const { categoryId } = req.params;
+  
+  try {
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Find and update category
+    const categoryIndex = user.categories.findIndex(cat => cat.id === categoryId);
+    if (categoryIndex === -1) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+    
+    // Update category fields
+    if (name !== undefined) {
+      user.categories[categoryIndex].name = name.trim();
+    }
+    if (color !== undefined) {
+      user.categories[categoryIndex].color = color;
+    }
+    
+    await user.save();
+    
+    res.status(200).json({
+      message: 'Category updated successfully',
+      category: user.categories[categoryIndex],
+      categories: user.categories
+    });
+    
+    console.log(`Category updated for user ${user.username}: ${categoryId}`);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete a category
+router.delete('/categories/:categoryId', async (req, res) => {
+  const { userId } = req.body;
+  const { categoryId } = req.params;
+  
+  try {
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Find and remove category
+    const categoryIndex = user.categories.findIndex(cat => cat.id === categoryId);
+    if (categoryIndex === -1) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+    
+    const deletedCategory = user.categories[categoryIndex];
+    user.categories.splice(categoryIndex, 1);
+    await user.save();
+    
+    res.status(200).json({
+      message: 'Category deleted successfully',
+      deletedCategory,
+      categories: user.categories
+    });
+    
+    console.log(`Category deleted for user ${user.username}: ${categoryId}`);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

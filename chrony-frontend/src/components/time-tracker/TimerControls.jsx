@@ -1,55 +1,146 @@
 import React, { useState, useEffect } from 'react';
 import moment from 'moment';
+import CategoryDropdown from './CategoryDropdown';
 
 const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
-  const [newCategory, setNewCategory] = useState('');
-  const [showAddCategory, setShowAddCategory] = useState(false);
   const [categories, setCategories] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState('');
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   
-  // Load user categories from localStorage on component mount
+  // Load user categories from database on component mount
   useEffect(() => {
-    const savedCategories = localStorage.getItem('timeTrackerCategories');
-    if (savedCategories) {
-      setCategories(JSON.parse(savedCategories));
-    } else {
-      // Default categories as a starting point
-      const defaultCategories = [
-        { id: 'work', name: 'Work' },
-        { id: 'study', name: 'Study' }
-      ];
-      setCategories(defaultCategories);
-      localStorage.setItem('timeTrackerCategories', JSON.stringify(defaultCategories));
-    }
+    const loadCategories = async () => {
+      try {
+        const user = JSON.parse(localStorage.getItem("user"));
+        if (!user || !user.userId) {
+          console.error("No user found in localStorage");
+          return;
+        }
+
+        const response = await fetch(
+          `http://localhost:3000/api/user/categories/${user.userId}`
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Simply use whatever categories the user has (even if empty)
+          setCategories(data.categories);
+          
+          // Update localStorage cache
+          localStorage.setItem('timeTrackerCategories', JSON.stringify(data.categories));
+        } else {
+          console.error('Failed to load categories from database');
+          // Fallback to localStorage if database fails
+          const savedCategories = localStorage.getItem('timeTrackerCategories');
+          if (savedCategories) {
+            setCategories(JSON.parse(savedCategories));
+          } else {
+            // User has no categories anywhere - start with empty array
+            setCategories([]);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading categories:', error);
+        // Fallback to localStorage if database fails
+        const savedCategories = localStorage.getItem('timeTrackerCategories');
+        if (savedCategories) {
+          setCategories(JSON.parse(savedCategories));
+        } else {
+          setCategories([]);
+        }
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    loadCategories();
   }, []);
 
-  // Save categories to localStorage when they change
-  useEffect(() => {
-    if (categories.length > 0) {
-      localStorage.setItem('timeTrackerCategories', JSON.stringify(categories));
-    }
-  }, [categories]);
+  // Add a new category
+  const handleAddCategory = async (categoryName) => {
+    const newCategoryObj = {
+      id: categoryName.toLowerCase().replace(/\s+/g, '-'),
+      name: categoryName.trim(),
+      color: '#00AFB9' // Default color
+    };
 
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
+      
+      const response = await fetch('http://localhost:3000/api/user/categories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.userId,
+          ...newCategoryObj
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data.categories);
+        setCategory(newCategoryObj.id);
+        
+        // Update localStorage cache
+        localStorage.setItem('timeTrackerCategories', JSON.stringify(data.categories));
+        
+        console.log('Category added successfully');
+      } else {
+        const errorData = await response.json();
+        alert(errorData.message || 'Failed to add category');
+      }
+    } catch (error) {
+      console.error('Error adding category:', error);
+      alert('Failed to add category. Please try again.');
+    }
+  };
+
+  // Delete a category
+  const handleDeleteCategory = async (categoryId) => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
+      
+      const response = await fetch(`http://localhost:3000/api/user/categories/${categoryId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.userId
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data.categories);
+        
+        // If the deleted category was selected, clear the selection
+        if (category === categoryId) {
+          setCategory('');
+        }
+        
+        // Update localStorage cache
+        localStorage.setItem('timeTrackerCategories', JSON.stringify(data.categories));
+        
+        console.log('Category deleted successfully');
+      } else {
+        const errorData = await response.json();
+        alert(errorData.message || 'Failed to delete category');
+      }
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      alert('Failed to delete category. Please try again.');
+    }
+  };
+  
   // Format seconds into HH:MM:SS
   const formatTime = (seconds) => {
     return moment.utc(seconds * 1000).format('HH:mm:ss');
-  };
-
-  // Add a new category
-  const handleAddCategory = () => {
-    if (!newCategory.trim()) return;
-    
-    const newCategoryObj = {
-      id: newCategory.toLowerCase().replace(/\s+/g, '-'),
-      name: newCategory.trim()
-    };
-    
-    setCategories([...categories, newCategoryObj]);
-    setCategory(newCategoryObj.id);
-    setNewCategory('');
-    setShowAddCategory(false);
   };
   
   // Filter for ongoing and upcoming events (within 1 hour)
@@ -145,43 +236,14 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
             </div>
             
             <div className="md:col-span-3">
-              {showAddCategory ? (
-                <div className="flex">
-                  <input
-                    type="text"
-                    placeholder="New category"
-                    className="w-full border border-gray-300 rounded-l px-3 py-2"
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleAddCategory()}
-                  />
-                  <button
-                    onClick={handleAddCategory}
-                    className="bg-[#00AFB9] text-white px-2 rounded-r hover:bg-[#0081A7] transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-              ) : (
-                <div className="flex">
-                  <select 
-                    className="w-full border border-gray-300 rounded-l px-3 py-2"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                  >
-                    <option value="">Select Category</option>
-                    {categories.map(cat => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => setShowAddCategory(true)}
-                    className="bg-gray-200 text-gray-700 px-2 rounded-r hover:bg-gray-300 transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-              )}
+              <CategoryDropdown
+                categories={categories}
+                selectedCategory={category}
+                onSelectCategory={setCategory}
+                onDeleteCategory={handleDeleteCategory}
+                onAddCategory={handleAddCategory}
+                disabled={categoriesLoading}
+              />
             </div>
             
             <div className="md:col-span-4">

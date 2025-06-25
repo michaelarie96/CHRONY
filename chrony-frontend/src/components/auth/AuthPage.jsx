@@ -1,23 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 
 const AuthPage = ({ onLoginSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
 
     try {
-      const endpoint = isLogin ? '/api/user/login' : '/api/user/register';
+      const endpoint = isLogin ? "/api/user/login" : "/api/user/register";
       const response = await fetch(endpoint, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ username, password }),
       });
@@ -25,18 +25,16 @@ const AuthPage = ({ onLoginSuccess }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Something went wrong');
+        throw new Error(data.message || "Something went wrong");
       }
 
       if (isLogin) {
-        // Save user info 
-        localStorage.setItem('user', JSON.stringify({ username: data.username , userId: data.userId}));
-        onLoginSuccess(data.username);
+        onLoginSuccess(data.username, data.userId);
       } else {
         setIsLogin(true);
-        setError('Registration successful! Please log in.');
-        setUsername('');
-        setPassword('');
+        setError("Registration successful! Please log in.");
+        setUsername("");
+        setPassword("");
       }
     } catch (err) {
       setError(err.message);
@@ -54,18 +52,27 @@ const AuthPage = ({ onLoginSuccess }) => {
         </div>
 
         <h2 className="text-2xl font-semibold text-center text-gray-800">
-          {isLogin ? 'Sign in to your account' : 'Create a new account'}
+          {isLogin ? "Sign in to your account" : "Create a new account"}
         </h2>
 
         {error && (
-          <div className={`p-3 rounded ${error.includes('successful') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          <div
+            className={`p-3 rounded ${
+              error.includes("successful")
+                ? "bg-green-100 text-green-700"
+                : "bg-red-100 text-red-700"
+            }`}
+          >
             {error}
           </div>
         )}
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="username"
+              className="block text-sm font-medium text-gray-700"
+            >
               Username
             </label>
             <input
@@ -80,7 +87,10 @@ const AuthPage = ({ onLoginSuccess }) => {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700"
+            >
               Password
             </label>
             <input
@@ -100,7 +110,7 @@ const AuthPage = ({ onLoginSuccess }) => {
               disabled={loading}
               className="w-full px-4 py-2 text-white bg-[#00AFB9] rounded-md hover:bg-[#0081A7] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00AFB9] transition duration-200"
             >
-              {loading ? 'Processing...' : isLogin ? 'Sign In' : 'Sign Up'}
+              {loading ? "Processing..." : isLogin ? "Sign In" : "Sign Up"}
             </button>
           </div>
         </form>
@@ -111,7 +121,9 @@ const AuthPage = ({ onLoginSuccess }) => {
             onClick={() => setIsLogin(!isLogin)}
             className="text-[#00AFB9] hover:underline focus:outline-none"
           >
-            {isLogin ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
+            {isLogin
+              ? "Need an account? Sign up"
+              : "Already have an account? Sign in"}
           </button>
         </div>
       </div>
