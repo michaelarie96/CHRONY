@@ -3,6 +3,7 @@ import WeeklyView from "./components/calendar/CalendarView";
 import TimeTracker from "./components/time-tracker/TimeTracker";
 import Analytics from "./components/analytics/Analytics";
 import Sidebar from "./components/common/Sidebar";
+import UserSettings from "./components/common/UserSettings";
 import AuthPage from "./components/auth/AuthPage";
 
 function App() {
@@ -40,6 +41,8 @@ function App() {
         return <TimeTracker />;
       case "analytics":
         return <Analytics />;
+      case "settings":
+        return <UserSettings />;
       default:
         return <WeeklyView />;
     }
@@ -56,6 +59,7 @@ function App() {
               {activeView === "calendar" && "Calendar"}
               {activeView === "time-tracker" && "Time Tracker"}
               {activeView === "analytics" && "Analytics"}
+              {activeView === "settings" && "Settings"}
             </h1>
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-500">

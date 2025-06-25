@@ -3,10 +3,32 @@ import moment from 'moment';
 
 const EventForm = ({ event, onSave, onCancel, onDelete }) => {
     const [title, setTitle] = useState(event?.title || '');
-    const [start, setStart] = useState(event?.start || new Date());
-    const [end, setEnd] = useState(event?.end || new Date());
     const [type, setType] = useState(event?.type || 'fixed');
     const [description, setDescription] = useState(event?.description || '');
+    
+    // Fixed event fields
+    const [fixedDate, setFixedDate] = useState(
+        event?.start ? moment(event.start).format('YYYY-MM-DD') : moment().format('YYYY-MM-DD')
+    );
+    const [fixedStartTime, setFixedStartTime] = useState(
+        event?.start ? moment(event.start).format('HH:mm') : '09:00'
+    );
+    const [fixedEndTime, setFixedEndTime] = useState(
+        event?.end ? moment(event.end).format('HH:mm') : '10:00'
+    );
+    
+    // Flexible event fields
+    const [flexibleDate, setFlexibleDate] = useState(
+        event?.start ? moment(event.start).format('YYYY-MM-DD') : moment().format('YYYY-MM-DD')
+    );
+    const [flexibleDuration, setFlexibleDuration] = useState(
+        event?.duration ? Math.floor(event.duration / 60) : 60 // duration in minutes
+    );
+    
+    // Fluid event fields
+    const [fluidDuration, setFluidDuration] = useState(
+        event?.duration ? Math.floor(event.duration / 60) : 30 // duration in minutes
+    );
     
     // Recurrence state
     const [recurrenceEnabled, setRecurrenceEnabled] = useState(event?.recurrence?.enabled || false);
@@ -20,21 +42,85 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const eventTypes = {
-        fixed: { name: "Fixed", color: "#0081A7", bgColor: "#0081A720" },
-        flexible: { name: "Flexible", color: "#00AFB9", bgColor: "#00AFB920" },
-        fluid: { name: "Fluid", color: "#F07167", bgColor: "#F0716720" }
+        fixed: { name: "Fixed", color: "#0081A7", bgColor: "#0081A720", description: "Exact date and time" },
+        flexible: { name: "Flexible", color: "#00AFB9", bgColor: "#00AFB920", description: "Specific day, flexible time" },
+        fluid: { name: "Fluid", color: "#F07167", bgColor: "#F0716720", description: "Anywhere this week" }
+    };
+
+    // Calculate start and end dates based on event type
+    const calculateEventTimes = () => {
+        const now = moment();
+        
+        switch (type) {
+            case 'fixed': {
+                const start = moment(`${fixedDate} ${fixedStartTime}`);
+                const end = moment(`${fixedDate} ${fixedEndTime}`);
+                const duration = end.diff(start, 'seconds');
+                return { start: start.toDate(), end: end.toDate(), duration };
+            }
+                
+            case 'flexible': {
+                // For flexible events, we set a placeholder time that the algorithm will adjust
+                const flexStart = moment(`${flexibleDate} 09:00`);
+                const flexEnd = moment(flexStart).add(flexibleDuration, 'minutes');
+                return { 
+                    start: flexStart.toDate(), 
+                    end: flexEnd.toDate(),
+                    duration: flexibleDuration * 60 // store duration in seconds
+                };
+            }
+                
+            case 'fluid': {
+                // For fluid events, we use the start of the current week as placeholder
+                const weekStart = now.clone().startOf('week').add(9, 'hours'); // 9 AM Monday
+                const fluidEnd = moment(weekStart).add(fluidDuration, 'minutes');
+                return { 
+                    start: weekStart.toDate(), 
+                    end: fluidEnd.toDate(),
+                    duration: fluidDuration * 60 // store duration in seconds
+                };
+            }
+                
+            default: {
+                return { start: now.toDate(), end: now.clone().add(1, 'hour').toDate() };
+            }
+        }
     };
 
     const handleSubmit = (e) => {
         e.preventDefault();
         
+        // Validation
+        if (!title.trim()) {
+            alert('Please enter a title');
+            return;
+        }
+        
+        if (type === 'fixed') {
+            const start = moment(`${fixedDate} ${fixedStartTime}`);
+            const end = moment(`${fixedDate} ${fixedEndTime}`);
+            
+            if (end.isSameOrBefore(start)) {
+                alert('End time must be after start time');
+                return;
+            }
+        }
+        
+        if ((type === 'flexible' && flexibleDuration <= 0) || (type === 'fluid' && fluidDuration <= 0)) {
+            alert('Duration must be greater than 0');
+            return;
+        }
+        
+        const { start, end, duration } = calculateEventTimes();
+        
         const eventData = {
             id: event?.id || Date.now(),
-            title,
+            title: title.trim(),
             start,
             end,
             type,
-            description,
+            description: description.trim(),
+            duration, // Include duration for flexible and fluid events
             recurrence: recurrenceEnabled ? {
                 enabled: true,
                 frequency,
@@ -50,6 +136,106 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
         onDelete(event.id);
     };
 
+    // Render type-specific form fields
+    const renderTypeSpecificFields = () => {
+        switch (type) {
+            case 'fixed':
+                return (
+                    <>
+                        <div className="mb-4">
+                            <label className="block mb-1 font-medium">Date</label>
+                            <input
+                                type="date"
+                                className="w-full border px-3 py-2 rounded"
+                                value={fixedDate}
+                                onChange={(e) => setFixedDate(e.target.value)}
+                                required
+                            />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block mb-1 font-medium">Start Time</label>
+                                <input
+                                    type="time"
+                                    className="w-full border px-3 py-2 rounded"
+                                    value={fixedStartTime}
+                                    onChange={(e) => setFixedStartTime(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block mb-1 font-medium">End Time</label>
+                                <input
+                                    type="time"
+                                    className="w-full border px-3 py-2 rounded"
+                                    value={fixedEndTime}
+                                    onChange={(e) => setFixedEndTime(e.target.value)}
+                                    required
+                                />
+                            </div>
+                        </div>
+                    </>
+                );
+                
+            case 'flexible':
+                return (
+                    <>
+                        <div className="mb-4">
+                            <label className="block mb-1 font-medium">Date</label>
+                            <input
+                                type="date"
+                                className="w-full border px-3 py-2 rounded"
+                                value={flexibleDate}
+                                onChange={(e) => setFlexibleDate(e.target.value)}
+                                required
+                            />
+                        </div>
+                        
+                        <div className="mb-4">
+                            <label className="block mb-1 font-medium">Duration (minutes)</label>
+                            <input
+                                type="number"
+                                min="15"
+                                max="480"
+                                step="15"
+                                className="w-full border px-3 py-2 rounded"
+                                value={flexibleDuration}
+                                onChange={(e) => setFlexibleDuration(parseInt(e.target.value))}
+                                required
+                            />
+                            <p className="text-sm text-gray-500 mt-1">
+                                The system will find the best time on this day
+                            </p>
+                        </div>
+                    </>
+                );
+                
+            case 'fluid':
+                return (
+                    <div className="mb-4">
+                        <label className="block mb-1 font-medium">Duration (minutes)</label>
+                        <input
+                            type="number"
+                            min="15"
+                            max="480"
+                            step="15"
+                            className="w-full border px-3 py-2 rounded"
+                            value={fluidDuration}
+                            onChange={(e) => setFluidDuration(parseInt(e.target.value))}
+                            required
+                        />
+                        <p className="text-sm text-gray-500 mt-1">
+                            The system will find the best time this week
+                        </p>
+                    </div>
+                );
+                
+            default:
+                return null;
+        }
+    };
+
     return (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto">
             <div className="mb-4">
@@ -58,30 +244,52 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
                     className="w-full border px-3 py-2 rounded"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
+                    placeholder="What do you want to do?"
                     required
                 />
             </div>
 
-            <div className="mb-4">
-                <label className="block mb-1 font-medium">Start</label>
-                <input
-                    type="datetime-local"
-                    className="w-full border px-3 py-2 rounded"
-                    value={moment(start).format('YYYY-MM-DDTHH:mm')}
-                    onChange={(e) => setStart(new Date(e.target.value))}
-                />
+            {/* Event Type Selection */}
+            <div className="mb-6">
+                <label className="block mb-2 font-medium">Event Type</label>
+                <div className="space-y-2">
+                    {Object.entries(eventTypes).map(([key, { name, color, description }]) => (
+                        <label
+                            key={key}
+                            className={`flex items-start p-3 border rounded cursor-pointer transition-all ${
+                                type === key ? 'bg-opacity-20 border-2' : 'border-1'
+                            }`}
+                            style={{
+                                borderColor: color,
+                                backgroundColor: type === key ? `${color}20` : 'transparent'
+                            }}
+                        >
+                            <input
+                                type="radio"
+                                name="eventType"
+                                value={key}
+                                checked={type === key}
+                                onChange={() => setType(key)}
+                                className="mr-3 mt-1"
+                            />
+                            <div>
+                                <div 
+                                    style={{ color }} 
+                                    className={`font-medium ${type === key ? 'font-semibold' : ''}`}
+                                >
+                                    {name}
+                                </div>
+                                <div className="text-sm text-gray-600">{description}</div>
+                            </div>
+                        </label>
+                    ))}
+                </div>
             </div>
 
-            <div className="mb-4">
-                <label className="block mb-1 font-medium">End</label>
-                <input
-                    type="datetime-local"
-                    className="w-full border px-3 py-2 rounded"
-                    value={moment(end).format('YYYY-MM-DDTHH:mm')}
-                    onChange={(e) => setEnd(new Date(e.target.value))}
-                />
-            </div>
+            {/* Type-specific fields */}
+            {renderTypeSpecificFields()}
 
+            {/* Description section */}
             <div className="mb-4">
                 <div className="flex items-center justify-between mb-1">
                     <label className="font-medium">Description</label>
@@ -104,6 +312,7 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
                 )}
             </div>
 
+            {/* Recurrence section */}
             <div className="mb-4">
                 <div className="flex items-center justify-between mb-1">
                     <label className="font-medium">Recurrence</label>
@@ -178,39 +387,24 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
                 )}
             </div>
 
-            <div className="mb-4">
-                <label className="block mb-1 font-medium">Event Type</label>
-                <div className="flex gap-3">
-                    {Object.entries(eventTypes).map(([key, { name, color }]) => (
-                        <label
-                            key={key}
-                            className={`flex items-center p-2 border rounded cursor-pointer ${type === key ? 'bg-opacity-20' : ''}`}
-                            style={{
-                                borderColor: color,
-                                backgroundColor: type === key ? `${color}20` : 'transparent'
-                            }}
-                        >
-                            <input
-                                type="radio"
-                                name="eventType"
-                                value={key}
-                                checked={type === key}
-                                onChange={() => setType(key)}
-                                className="mr-2"
-                            />
-                            <span style={{ color }} className={type === key ? 'font-semibold' : ''}>
-                                {name}
-                            </span>
-                        </label>
-                    ))}
-                </div>
-            </div>
-
+            {/* Action buttons */}
             <div className="flex space-x-2">
-                <button type="submit" className="bg-[#00AFB9] text-white px-4 py-2 rounded hover:bg-[#0081A7] transition-colors">Save</button>
-                <button type="button" className="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded transition-colors" onClick={onCancel}>Cancel</button>
+                <button 
+                    type="submit" 
+                    className="bg-[#00AFB9] text-white px-4 py-2 rounded hover:bg-[#0081A7] transition-colors"
+                >
+                    Save
+                </button>
+                <button 
+                    type="button" 
+                    className="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded transition-colors" 
+                    onClick={onCancel}
+                >
+                    Cancel
+                </button>
             </div>
 
+            {/* Delete section */}
             {event?.id && (
                 <div className="mt-4">
                     {showDeleteConfirm ? (

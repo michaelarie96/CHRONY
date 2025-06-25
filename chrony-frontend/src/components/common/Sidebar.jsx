@@ -2,10 +2,11 @@ import React from 'react';
 
 const Sidebar = ({ activeItem, onItemClick }) => {
   const menuItems = [
-    { id: 'calendar', icon: '📅', label: 'Calendar' },
-    { id: 'time-tracker', icon: '⏱️', label: 'Time Tracker' },
-    { id: 'analytics', icon: '📊', label: 'Analytics' }
-  ];
+  { id: 'calendar', icon: '📅', label: 'Calendar' },
+  { id: 'time-tracker', icon: '⏱️', label: 'Time Tracker' },
+  { id: 'analytics', icon: '📊', label: 'Analytics' },
+  { id: 'settings', icon: '⚙️', label: 'Settings' }
+];
 
   return (
     <div className="w-60 min-h-screen bg-[#f9f9f9] border-r border-gray-200">
