@@ -15,10 +15,13 @@ class SchedulingService {
   async scheduleEvent(event, existingEvents, userSettings) {
     console.log(`\n🧠 SCHEDULING: ${event.title} (${event.type})`);
     
+    // Validate user settings first
+    this.validateUserSettings(userSettings);
+    
     try {
       switch (event.type) {
         case 'fixed':
-          return this.scheduleFixedEvent(event, existingEvents);
+          return this.scheduleFixedEvent(event, existingEvents, userSettings);
         
         case 'flexible':
           return this.scheduleFlexibleEvent(event, existingEvents, userSettings);
@@ -36,9 +39,25 @@ class SchedulingService {
   }
 
   /**
-   * Fixed events: Just validate no conflicts exist
+   * Fixed events: Validate constraints and check conflicts
    */
-  scheduleFixedEvent(event, existingEvents) {
+  scheduleFixedEvent(event, existingEvents, userSettings) {
+    // Check if event is on rest day
+    const eventDay = moment(event.start).day(); // 0 = Sunday, 6 = Saturday
+    const restDayNumber = userSettings.restDay === 'sunday' ? 0 : 6;
+    
+    if (eventDay === restDayNumber) {
+      throw new Error(`Cannot schedule on ${userSettings.restDay} (your rest day)`);
+    }
+    
+    // Check if event fits within active hours
+    if (!this.isWithinActiveHours(event.start, event.end, userSettings)) {
+      const startTime = moment(event.start).format('HH:mm');
+      const endTime = moment(event.end).format('HH:mm');
+      throw new Error(`Event ${startTime}-${endTime} is outside active hours ${userSettings.activeStartTime}-${userSettings.activeEndTime}`);
+    }
+    
+    // Check for conflicts
     const conflicts = this.findConflicts(event, existingEvents);
     
     if (conflicts.length > 0) {
@@ -54,18 +73,25 @@ class SchedulingService {
    */
   scheduleFlexibleEvent(event, existingEvents, userSettings) {
     const targetDate = moment(event.start).format('YYYY-MM-DD');
+    const targetDay = moment(event.start).day();
+    const restDayNumber = userSettings.restDay === 'sunday' ? 0 : 6;
     const durationMinutes = Math.floor(event.duration / 60);
     
     console.log(`🔍 Finding ${durationMinutes}min slot on ${targetDate}`);
     
+    // Check if target day is rest day
+    if (targetDay === restDayNumber) {
+      throw new Error(`Cannot schedule on ${userSettings.restDay} (your rest day)`);
+    }
+    
     // Generate all possible time slots for the day
     const timeSlots = this.generateDayTimeSlots(targetDate, userSettings);
     
-    // Forward Checking: Find valid slots
-    const validSlots = this.forwardCheck(timeSlots, durationMinutes, existingEvents);
+    // Forward Checking: Find valid slots that fit within active hours
+    const validSlots = this.forwardCheck(timeSlots, durationMinutes, existingEvents, userSettings);
     
     if (validSlots.length === 0) {
-      throw new Error(`No available ${durationMinutes}-minute slots on ${targetDate}`);
+      throw new Error(`No available ${durationMinutes}-minute slots on ${targetDate} within active hours ${userSettings.activeStartTime}-${userSettings.activeEndTime}`);
     }
     
     // Select best slot (earliest available)
@@ -97,7 +123,7 @@ class SchedulingService {
       console.log(`  🔍 Trying ${day.format('dddd, MMM DD')}`);
       
       const timeSlots = this.generateDayTimeSlots(day.format('YYYY-MM-DD'), userSettings);
-      const validSlots = this.forwardCheck(timeSlots, durationMinutes, existingEvents);
+      const validSlots = this.forwardCheck(timeSlots, durationMinutes, existingEvents, userSettings);
       
       if (validSlots.length > 0) {
         const bestSlot = validSlots[0];
@@ -112,19 +138,28 @@ class SchedulingService {
       }
     }
     
-    throw new Error(`No available ${durationMinutes}-minute slots in the working week`);
+    throw new Error(`No available ${durationMinutes}-minute slots in the working week (excluding ${userSettings.restDay})`);
   }
 
   /**
    * Forward Checking: Filter time slots that can accommodate the event duration
+   * AND fit within active hours
    */
-  forwardCheck(timeSlots, durationMinutes, existingEvents) {
+  forwardCheck(timeSlots, durationMinutes, existingEvents, userSettings) {
     const validSlots = [];
     
     for (const slot of timeSlots) {
+      const proposedStart = slot;
+      const proposedEnd = slot.clone().add(durationMinutes, 'minutes');
+      
+      // Check if the entire event fits within active hours
+      if (!this.isWithinActiveHours(proposedStart.toDate(), proposedEnd.toDate(), userSettings)) {
+        continue; // Skip this slot, doesn't fit in active hours
+      }
+      
       const proposedEvent = {
-        start: slot.toDate(),
-        end: slot.clone().add(durationMinutes, 'minutes').toDate()
+        start: proposedStart.toDate(),
+        end: proposedEnd.toDate()
       };
       
       // Check if this slot conflicts with existing events
@@ -132,13 +167,33 @@ class SchedulingService {
       
       if (conflicts.length === 0) {
         validSlots.push({
-          start: slot,
-          end: slot.clone().add(durationMinutes, 'minutes')
+          start: proposedStart,
+          end: proposedEnd
         });
       }
     }
     
     return validSlots;
+  }
+
+  /**
+   * Check if an event fits completely within user's active hours
+   */
+  isWithinActiveHours(startTime, endTime, userSettings) {
+    const eventStart = moment(startTime);
+    const eventEnd = moment(endTime);
+    const eventDate = eventStart.format('YYYY-MM-DD');
+    
+    // Create moment objects for active hours on the same date
+    const activeStart = moment(`${eventDate} ${userSettings.activeStartTime}`);
+    const activeEnd = moment(`${eventDate} ${userSettings.activeEndTime}`);
+    
+    // Event must start at or after active start time
+    // AND end at or before active end time
+    const startsWithinHours = eventStart.isSameOrAfter(activeStart);
+    const endsWithinHours = eventEnd.isSameOrBefore(activeEnd);
+    
+    return startsWithinHours && endsWithinHours;
   }
 
   /**
@@ -151,6 +206,8 @@ class SchedulingService {
     
     let current = startTime.clone();
     
+    // Generate slots up to (but not including) end time
+    // This ensures events can't extend beyond active hours
     while (current.isBefore(endTime)) {
       slots.push(current.clone());
       current.add(this.SLOT_DURATION_MINUTES, 'minutes');
@@ -221,6 +278,11 @@ class SchedulingService {
     const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (!timeRegex.test(userSettings.activeStartTime) || !timeRegex.test(userSettings.activeEndTime)) {
       throw new Error('Invalid time format in user settings');
+    }
+    
+    // Validate rest day
+    if (!['saturday', 'sunday'].includes(userSettings.restDay)) {
+      throw new Error('Rest day must be either "saturday" or "sunday"');
     }
     
     return true;
