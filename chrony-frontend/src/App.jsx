@@ -6,6 +6,7 @@ import Sidebar from "./components/common/Sidebar";
 import UserSettings from "./components/common/UserSettings";
 import AuthPage from "./components/auth/AuthPage";
 import SetupPage from "./components/auth/SetupPage";
+import { NotificationProvider } from "./components/providers/NotificationProvider";
 
 function App() {
   const [activeView, setActiveView] = useState("calendar");
@@ -18,7 +19,7 @@ function App() {
     if (storedUser) {
       const userData = JSON.parse(storedUser);
       setUser(userData);
-      
+
       // Check if user has completed setup
       const setupCompleted = userData.setupCompleted === true;
       setNeedsSetup(!setupCompleted);
@@ -26,10 +27,10 @@ function App() {
   }, []);
 
   const handleLoginSuccess = (username, userId) => {
-    const newUser = { 
-      username, 
+    const newUser = {
+      username,
       userId,
-      setupCompleted: false // New users always need setup
+      setupCompleted: false, // New users always need setup
     };
     setUser(newUser);
     setNeedsSetup(true); // Force setup for new login
@@ -73,41 +74,43 @@ function App() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar activeItem={activeView} onItemClick={setActiveView} />
+    <NotificationProvider>
+      <div className="flex min-h-screen bg-gray-50">
+        <Sidebar activeItem={activeView} onItemClick={setActiveView} />
 
-      <div className="flex-1 flex flex-col">
-        <header className="bg-white shadow-sm py-4 px-6">
-          <div className="container mx-auto flex justify-between items-center">
-            <h1 className="text-xl font-semibold text-[#0081A7]">
-              {activeView === "calendar" && "Calendar"}
-              {activeView === "time-tracker" && "Time Tracker"}
-              {activeView === "analytics" && "Analytics"}
-              {activeView === "settings" && "Settings"}
-            </h1>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-500">
-                Welcome, {user.username}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="text-sm text-red-500 hover:text-red-700"
-              >
-                Logout
-              </button>
+        <div className="flex-1 flex flex-col">
+          <header className="bg-white shadow-sm py-4 px-6">
+            <div className="container mx-auto flex justify-between items-center">
+              <h1 className="text-xl font-semibold text-[#0081A7]">
+                {activeView === "calendar" && "Calendar"}
+                {activeView === "time-tracker" && "Time Tracker"}
+                {activeView === "analytics" && "Analytics"}
+                {activeView === "settings" && "Settings"}
+              </h1>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-500">
+                  Welcome, {user.username}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="text-sm text-red-500 hover:text-red-700"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <main className="flex-1 container mx-auto py-6">{renderView()}</main>
+          <main className="flex-1 container mx-auto py-6">{renderView()}</main>
 
-        <footer className="bg-white py-4 px-6 border-t border-gray-100">
-          <div className="container mx-auto text-center text-sm text-gray-500">
-            Developed by Dor Adiv and Michael Arie
-          </div>
-        </footer>
+          <footer className="bg-white py-4 px-6 border-t border-gray-100">
+            <div className="container mx-auto text-center text-sm text-gray-500">
+              Developed by Dor Adiv and Michael Arie
+            </div>
+          </footer>
+        </div>
       </div>
-    </div>
+    </NotificationProvider>
   );
 }
 
