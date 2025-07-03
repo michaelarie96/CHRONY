@@ -35,13 +35,58 @@ const createRecurringEvents = (eventData, recurrence) => {
   return events;
 };
 
-// Create a new event/s with intelligent scheduling
+// Helper function to update moved events in database atomically
+const updateMovedEventsInDatabase = async (movedEvents) => {
+  const updatePromises = movedEvents.map(async (movedEvent) => {
+    // Extract database ID (handle both _id and id formats)
+    const eventId = movedEvent._id || movedEvent.id;
+    
+    if (!eventId) {
+      console.warn('⚠️ Moved event missing ID, skipping database update:', movedEvent.title);
+      return null;
+    }
+    
+    try {
+      const updatedEvent = await Event.findByIdAndUpdate(
+        eventId,
+        {
+          start: movedEvent.start,
+          end: movedEvent.end,
+          // Preserve other fields but update timestamps
+          updated: new Date()
+        },
+        { new: true, runValidators: true }
+      );
+      
+      if (!updatedEvent) {
+        console.warn(`⚠️ Event ${eventId} not found in database during move update`);
+        return null;
+      }
+      
+      console.log(`📍 Updated moved event in DB: ${updatedEvent.title}`);
+      return updatedEvent;
+    } catch (error) {
+      console.error(`❌ Failed to update moved event ${eventId}:`, error.message);
+      throw error; // Re-throw to trigger transaction rollback
+    }
+  });
+  
+  // Wait for all updates to complete
+  const results = await Promise.all(updatePromises);
+  return results.filter(result => result !== null); // Remove null results
+};
+
+// Create a new event with intelligent scheduling and cascading support
 router.post('/', async (req, res) => {
   try {
     const { title, start, end, type, description, recurrence, user, duration } = req.body;
 
+    // Validate required fields
     if (!title || !start || !end || !type || !user) {
-      return res.status(400).json({ error: 'Missing required fields: title, start, end, type, or user' });
+      return res.status(400).json({ 
+        error: 'Missing required fields: title, start, end, type, or user',
+        type: 'VALIDATION_ERROR'
+      });
     }
 
     console.log(`\n📅 API: Creating ${type} event "${title}" for user ${user}`);
@@ -49,13 +94,17 @@ router.post('/', async (req, res) => {
     // Step 1: Fetch user settings (required for scheduling algorithm)
     const userDoc = await User.findById(user);
     if (!userDoc) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ 
+        error: 'User not found',
+        type: 'USER_NOT_FOUND'
+      });
     }
 
     // Validate user has completed settings setup
     if (!userDoc.settings || !userDoc.settings.activeStartTime || !userDoc.settings.activeEndTime) {
       return res.status(400).json({ 
-        error: 'User settings incomplete. Please complete your profile setup first.' 
+        error: 'User settings incomplete. Please complete your profile setup first.',
+        type: 'INCOMPLETE_SETTINGS'
       });
     }
 
@@ -80,139 +129,261 @@ router.post('/', async (req, res) => {
       duration: calculatedDuration
     };
 
-    let createdEvents = [];
+    let finalResponse = {
+      success: true,
+      events: [],
+      movedEvents: [],
+      message: ''
+    };
 
     if (recurrence && recurrence.enabled) {
-      console.log(`🔄 Creating ${recurrence.count} recurring events`);
+      console.log(`🔄 Creating ${recurrence.count} recurring events with cascading`);
       
       const eventInstances = createRecurringEvents(baseEventData, recurrence);
+      const createdEvents = [];
+      const allMovedEvents = [];
       
-      // Schedule each recurring event individually
-      const scheduledInstances = [];
+      // Schedule each recurring event individually with cumulative conflict checking
       for (let i = 0; i < eventInstances.length; i++) {
         const instance = eventInstances[i];
-        console.log(`\n🧠 Scheduling instance ${i + 1}/${eventInstances.length}`);
+        console.log(`\n🧠 Scheduling recurring instance ${i + 1}/${eventInstances.length}`);
         
         try {
-          // Use scheduling service to optimize timing
-          const scheduledEvent = await schedulingService.scheduleEvent(
+          // Include previously scheduled instances in conflict checking
+          const currentExistingEvents = [...existingEvents, ...createdEvents, ...allMovedEvents];
+          
+          // Use enhanced scheduling service
+          const schedulingResult = await schedulingService.scheduleEvent(
             instance, 
-            [...existingEvents, ...scheduledInstances], // Include previously scheduled instances
+            currentExistingEvents,
             userDoc.settings
           );
           
-          scheduledInstances.push(scheduledEvent);
-        } catch (error) {
-          console.error(`❌ Failed to schedule instance ${i + 1}:`, error.message);
+          // Handle the enhanced response format
+          if (schedulingResult.scheduledEvent) {
+            createdEvents.push(schedulingResult.scheduledEvent);
+          }
           
-          // For recurring events, we'll skip problematic instances rather than fail completely
+          if (schedulingResult.movedEvents && schedulingResult.movedEvents.length > 0) {
+            console.log(`📋 Instance ${i + 1} caused ${schedulingResult.movedEvents.length} events to be moved`);
+            allMovedEvents.push(...schedulingResult.movedEvents);
+          }
+          
+        } catch (error) {
+          console.error(`❌ Failed to schedule recurring instance ${i + 1}:`, error.message);
+          
+          // For recurring events, handle failures gracefully
           if (type === 'fixed') {
             // Fixed events must be scheduled exactly, so fail if there's a conflict
             return res.status(409).json({ 
-              error: `Cannot schedule recurring event instance ${i + 1}: ${error.message}` 
+              error: `Cannot schedule recurring event instance ${i + 1}: ${error.message}`,
+              type: 'RECURRING_SCHEDULING_CONFLICT',
+              failedInstance: i + 1
             });
           } else {
             // For flexible/fluid, skip this instance and continue
-            console.log(`⚠️ Skipping instance ${i + 1} due to scheduling conflict`);
+            console.log(`⚠️ Skipping recurring instance ${i + 1} due to scheduling conflict`);
             continue;
           }
         }
       }
       
-      if (scheduledInstances.length === 0) {
+      if (createdEvents.length === 0) {
         return res.status(409).json({ 
-          error: 'Unable to schedule any instances of the recurring event' 
+          error: 'Unable to schedule any instances of the recurring event',
+          type: 'RECURRING_TOTAL_FAILURE'
         });
       }
       
-      // Save all successfully scheduled instances
-      createdEvents = await Event.insertMany(scheduledInstances);
-      console.log(`✅ Successfully created ${createdEvents.length} recurring events`);
+      // Database transaction: Save all new events and update moved events
+      try {
+        // Update moved events first
+        if (allMovedEvents.length > 0) {
+          console.log(`🔄 Updating ${allMovedEvents.length} moved events in database`);
+          await updateMovedEventsInDatabase(allMovedEvents);
+        }
+        
+        // Save all new recurring events
+        const savedEvents = await Event.insertMany(createdEvents);
+        console.log(`✅ Successfully created ${savedEvents.length} recurring events`);
+        
+        finalResponse.events = savedEvents;
+        finalResponse.movedEvents = allMovedEvents;
+        finalResponse.message = `Created ${savedEvents.length} recurring events`;
+        
+        if (allMovedEvents.length > 0) {
+          finalResponse.message += `, moved ${allMovedEvents.length} existing events`;
+        }
+        
+      } catch (dbError) {
+        console.error('❌ Database transaction failed:', dbError.message);
+        return res.status(500).json({ 
+          error: 'Failed to save events to database',
+          type: 'DATABASE_ERROR',
+          details: dbError.message
+        });
+      }
       
     } else {
-      console.log(`🎯 Creating single event`);
+      console.log(`🎯 Creating single event with cascading support`);
       
       try {
-        // Step 4: Use scheduling service to optimize event timing
-        const scheduledEvent = await schedulingService.scheduleEvent(
+        // Step 4: Use enhanced scheduling service
+        const schedulingResult = await schedulingService.scheduleEvent(
           baseEventData, 
           existingEvents, 
           userDoc.settings
         );
         
-        console.log(`🧠 Scheduling result:`, {
-          original: `${new Date(start).toISOString()} - ${new Date(end).toISOString()}`,
-          optimized: `${scheduledEvent.start.toISOString()} - ${scheduledEvent.end.toISOString()}`
+        console.log(`🧠 Scheduling completed:`, {
+          originalTime: `${new Date(start).toISOString()} - ${new Date(end).toISOString()}`,
+          scheduledTime: `${schedulingResult.scheduledEvent.start.toISOString()} - ${schedulingResult.scheduledEvent.end.toISOString()}`,
+          movedEventsCount: schedulingResult.movedEvents?.length || 0
         });
         
-        // Step 5: Save the optimized event
-        const event = new Event(scheduledEvent);
-        const savedEvent = await event.save();
-        createdEvents = [savedEvent];
+        // Database transaction: Save new event and update moved events
+        try {
+          // Update moved events first
+          if (schedulingResult.movedEvents && schedulingResult.movedEvents.length > 0) {
+            console.log(`🔄 Updating ${schedulingResult.movedEvents.length} moved events in database`);
+            await updateMovedEventsInDatabase(schedulingResult.movedEvents);
+          }
+          
+          // Save the new event
+          const event = new Event(schedulingResult.scheduledEvent);
+          const savedEvent = await event.save();
+          console.log(`✅ New event saved successfully`);
+          
+          finalResponse.events = [savedEvent];
+          finalResponse.movedEvents = schedulingResult.movedEvents || [];
+          finalResponse.message = 'Event created successfully';
+          
+          if (schedulingResult.movedEvents && schedulingResult.movedEvents.length > 0) {
+            finalResponse.message += `, moved ${schedulingResult.movedEvents.length} existing events`;
+          }
+          
+        } catch (dbError) {
+          console.error('❌ Database transaction failed:', dbError.message);
+          return res.status(500).json({ 
+            error: 'Failed to save event to database',
+            type: 'DATABASE_ERROR',
+            details: dbError.message
+          });
+        }
         
-        console.log(`✅ Event created successfully with optimized timing`);
+      } catch (schedulingError) {
+        console.error(`❌ Scheduling failed:`, schedulingError.message);
         
-      } catch (error) {
-        console.error(`❌ Scheduling failed:`, error.message);
-        
-        if (error.message.includes('conflicts with') || error.message.includes('No available')) {
+        // Enhanced error handling for different types of scheduling failures
+        if (schedulingError.message.includes('conflicts with') || 
+            schedulingError.message.includes('No available')) {
           return res.status(409).json({ 
-            error: `Scheduling conflict: ${error.message}`,
-            type: 'SCHEDULING_CONFLICT'
+            error: `Scheduling conflict: ${schedulingError.message}`,
+            type: 'SCHEDULING_CONFLICT',
+            suggestion: type === 'fixed' 
+              ? 'Try a different time for this fixed event'
+              : 'The algorithm could not find suitable alternative times'
+          });
+        } else if (schedulingError.message.includes('active hours')) {
+          return res.status(400).json({ 
+            error: `Event time constraint: ${schedulingError.message}`,
+            type: 'TIME_CONSTRAINT_ERROR',
+            suggestion: 'Check your active hours in settings'
+          });
+        } else if (schedulingError.message.includes('rest day')) {
+          return res.status(400).json({ 
+            error: `Rest day constraint: ${schedulingError.message}`,
+            type: 'REST_DAY_ERROR',
+            suggestion: 'Choose a different day (not your rest day)'
           });
         } else {
           return res.status(500).json({ 
-            error: `Scheduling error: ${error.message}` 
+            error: `Scheduling error: ${schedulingError.message}`,
+            type: 'SCHEDULING_ERROR'
           });
         }
       }
     }
 
-    res.status(201).json(createdEvents);
+    // Return enhanced response with moved events information
+    res.status(201).json(finalResponse);
+    
   } catch (error) {
     console.error('❌ Event creation error:', error);
-    res.status(400).json({ error: error.message });
+    res.status(500).json({ 
+      error: 'Internal server error during event creation',
+      type: 'INTERNAL_ERROR',
+      details: error.message 
+    });
   }
 });
 
-// Get all events for a specific user
+// Get all events for a specific user (with optional date filtering)
 router.get('/', async (req, res) => {
   try {
-    const { userId } = req.query;
+    const { userId, start, end } = req.query;
 
     if (!userId) {
-      return res.status(400).json({ error: 'Missing userId query parameter' });
+      return res.status(400).json({ 
+        error: 'Missing userId query parameter',
+        type: 'VALIDATION_ERROR'
+      });
     }
 
-    const events = await Event.find({ user: userId }).sort({ start: 1 });
+    let query = { user: userId };
+    
+    // Add date filtering if provided
+    if (start && end) {
+      query.start = { 
+        $gte: new Date(start),
+        $lte: new Date(end)
+      };
+    }
+
+    const events = await Event.find(query).sort({ start: 1 });
+    console.log(`📋 Retrieved ${events.length} events for user ${userId}`);
+    
     res.status(200).json(events);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('❌ Error retrieving events:', error);
+    res.status(500).json({ 
+      error: 'Failed to retrieve events',
+      type: 'DATABASE_ERROR',
+      details: error.message 
+    });
   }
 });
 
-// Update an event by ID
+// Update an event by ID with cascading support
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
 
-    // For event updates, we should also run through scheduling if timing changes
+    // Find the existing event
     const existingEvent = await Event.findById(id);
     if (!existingEvent) {
-      return res.status(404).json({ error: 'Event not found' });
+      return res.status(404).json({ 
+        error: 'Event not found',
+        type: 'EVENT_NOT_FOUND'
+      });
     }
 
-    // Check if this is a timing-related update
+    console.log(`\n📝 Updating event: ${existingEvent.title}`);
+
+    // Check if this is a timing-related update that requires rescheduling
     const isTimingUpdate = updateData.start || updateData.end || updateData.type || updateData.duration;
     
     if (isTimingUpdate) {
-      console.log(`\n📝 Updating event with timing changes: ${existingEvent.title}`);
+      console.log(`🧠 Timing update detected, running cascading algorithm`);
       
       // Fetch user settings and other events for rescheduling
       const userDoc = await User.findById(existingEvent.user);
       if (!userDoc || !userDoc.settings) {
-        return res.status(400).json({ error: 'User settings not found' });
+        return res.status(400).json({ 
+          error: 'User settings not found',
+          type: 'USER_SETTINGS_ERROR'
+        });
       }
       
       // Get other events (excluding the one being updated)
@@ -226,60 +397,128 @@ router.put('/:id', async (req, res) => {
         ...existingEvent.toObject(),
         ...updateData,
         start: updateData.start ? new Date(updateData.start) : existingEvent.start,
-        end: updateData.end ? new Date(updateData.end) : existingEvent.end
+        end: updateData.end ? new Date(updateData.end) : existingEvent.end,
+        // Recalculate duration if timing changed
+        duration: (updateData.start || updateData.end) 
+          ? Math.floor((new Date(updateData.end || existingEvent.end) - new Date(updateData.start || existingEvent.start)) / 1000)
+          : (updateData.duration || existingEvent.duration)
       };
       
       try {
-        // Use scheduling service to validate/optimize the update
-        const scheduledEvent = await schedulingService.scheduleEvent(
+        // Use enhanced scheduling service for the update
+        const schedulingResult = await schedulingService.scheduleEvent(
           updatedEventData,
           otherEvents,
           userDoc.settings
         );
         
-        const updatedEvent = await Event.findByIdAndUpdate(id, scheduledEvent, {
-          new: true,
-          runValidators: true
-        });
+        // Database transaction: Update main event and moved events
+        try {
+          // Update moved events first
+          if (schedulingResult.movedEvents && schedulingResult.movedEvents.length > 0) {
+            console.log(`🔄 Updating ${schedulingResult.movedEvents.length} moved events`);
+            await updateMovedEventsInDatabase(schedulingResult.movedEvents);
+          }
+          
+          // Update the main event
+          const updatedEvent = await Event.findByIdAndUpdate(id, schedulingResult.scheduledEvent, {
+            new: true,
+            runValidators: true
+          });
+          
+          console.log(`✅ Event updated with cascading support`);
+          
+          const response = {
+            success: true,
+            event: updatedEvent,
+            movedEvents: schedulingResult.movedEvents || [],
+            message: 'Event updated successfully'
+          };
+          
+          if (schedulingResult.movedEvents && schedulingResult.movedEvents.length > 0) {
+            response.message += `, moved ${schedulingResult.movedEvents.length} other events`;
+          }
+          
+          res.status(200).json(response);
+          
+        } catch (dbError) {
+          console.error('❌ Database update failed:', dbError.message);
+          return res.status(500).json({ 
+            error: 'Failed to update events in database',
+            type: 'DATABASE_ERROR',
+            details: dbError.message
+          });
+        }
         
-        console.log(`✅ Event updated with optimized timing`);
-        res.status(200).json(updatedEvent);
-        
-      } catch (error) {
-        console.error(`❌ Update scheduling failed:`, error.message);
+      } catch (schedulingError) {
+        console.error(`❌ Update scheduling failed:`, schedulingError.message);
         return res.status(409).json({ 
-          error: `Cannot update event: ${error.message}`,
-          type: 'SCHEDULING_CONFLICT'
+          error: `Cannot update event: ${schedulingError.message}`,
+          type: 'UPDATE_SCHEDULING_CONFLICT',
+          suggestion: 'Try different timing or check for conflicts'
         });
       }
       
     } else {
-      // Simple update (no timing changes)
+      // Simple update (no timing changes) - no cascading needed
+      console.log(`📝 Non-timing update, direct database update`);
+      
       const updatedEvent = await Event.findByIdAndUpdate(id, updateData, {
         new: true,
         runValidators: true
       });
       
       console.log(`✅ Event updated (non-timing changes)`);
-      res.status(200).json(updatedEvent);
+      
+      res.status(200).json({
+        success: true,
+        event: updatedEvent,
+        movedEvents: [],
+        message: 'Event updated successfully'
+      });
     }
 
   } catch (error) {
     console.error('❌ Event update error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: 'Internal server error during event update',
+      type: 'INTERNAL_ERROR',
+      details: error.message 
+    });
   }
 });
 
 // Delete an event
 router.delete('/:id', async (req, res) => {
   try {
-    const deletedEvent = await Event.findByIdAndDelete(req.params.id);
-    if (!deletedEvent) return res.status(404).json({ message: 'Event not found' });
+    const { id } = req.params;
+    
+    const deletedEvent = await Event.findByIdAndDelete(id);
+    if (!deletedEvent) {
+      return res.status(404).json({ 
+        error: 'Event not found',
+        type: 'EVENT_NOT_FOUND'
+      });
+    }
     
     console.log(`🗑️ Event deleted: ${deletedEvent.title}`);
-    res.json({ message: 'Event deleted successfully' });
+    
+    res.status(200).json({
+      success: true,
+      message: 'Event deleted successfully',
+      deletedEvent: {
+        id: deletedEvent._id,
+        title: deletedEvent.title
+      }
+    });
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('❌ Event deletion error:', error);
+    res.status(500).json({ 
+      error: 'Failed to delete event',
+      type: 'DATABASE_ERROR',
+      details: error.message 
+    });
   }
 });
 
