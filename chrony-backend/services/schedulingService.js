@@ -769,8 +769,28 @@ class SchedulingService {
               e.id !== fluidEvent.id
           );
 
+          // Forbidden zone = the gap itself (where the flexible event will be placed)
+          const forbiddenZone = {
+            start: gap.start,
+            end: gap.end,
+          };
+
+          // Create event object explicitly
+          const eventToMove = {
+            _id: fluidEvent._id,
+            id: fluidEvent.id,
+            title: fluidEvent.title,
+            type: fluidEvent.type,
+            start: fluidEvent.start,
+            end: fluidEvent.end,
+            duration: fluidEvent.duration,
+            description: fluidEvent.description,
+            user: fluidEvent.user,
+            forbiddenZone: forbiddenZone,
+          };
+
           const moveResult = await this.placeEventWithCascading(
-            fluidEvent,
+            eventToMove,
             eventsWithoutFluid,
             userSettings,
             depth + 1
@@ -881,21 +901,24 @@ class SchedulingService {
         }" (${pair.totalDuration}min)`
       );
 
-      // Try to move both events
-      const eventsWithoutPair = existingEvents.filter(
-        (e) =>
-          e._id?.toString() !== event1._id?.toString() &&
-          e.id !== event1.id &&
-          e._id?.toString() !== event2._id?.toString() &&
-          e.id !== event2.id
-      );
+      // Create a forbidden zone for event2 - should be on the original time of event1
+      const forbiddenZone = {
+        start: event1.start,
+        end: event1.end,
+      };
 
+      let currentEventsForPair = [...existingEvents];
       const allMovedEvents = [];
+
+      currentEventsForPair = currentEventsForPair.filter(
+        (e) =>
+          e._id?.toString() !== event1._id?.toString() && e.id !== event1.id
+      );
 
       // Try to move first event
       const move1Result = await this.placeEventWithCascading(
         event1,
-        [...eventsWithoutPair, ...allMovedEvents],
+        [...currentEventsForPair, ...allMovedEvents],
         userSettings,
         depth + 1
       );
@@ -912,10 +935,28 @@ class SchedulingService {
         ...move1Result.movedEvents
       );
 
+      currentEventsForPair = currentEventsForPair.filter(
+        (e) =>
+          e._id?.toString() !== event2._id?.toString() && e.id !== event2.id
+      );
+
+      const eventToMove2 = {
+        _id: event2._id,
+        id: event2.id,
+        title: event2.title,
+        type: event2.type,
+        start: event2.start,
+        end: event2.end,
+        duration: event2.duration,
+        description: event2.description,
+        user: event2.user,
+        forbiddenZone: forbiddenZone,
+      };
+
       // Try to move second event
       const move2Result = await this.placeEventWithCascading(
-        event2,
-        [...eventsWithoutPair, ...allMovedEvents],
+        eventToMove2,
+        [...currentEventsForPair, ...allMovedEvents],
         userSettings,
         depth + 1
       );
@@ -1104,7 +1145,20 @@ class SchedulingService {
         continue;
       }
 
-      // Avoid forbidden zone (target event's time that caused the cascading)
+      // Avoid original slot for existing events
+      if (eventBeingMoved && eventBeingMoved._id) {
+        const originalStart = moment(eventBeingMoved.start);
+        const originalEnd = moment(eventBeingMoved.end);
+
+        if (
+          proposedStart.isBefore(originalEnd) &&
+          proposedEnd.isAfter(originalStart)
+        ) {
+          continue;
+        }
+      }
+
+      // NEW: Avoid forbidden zone (target event's time)
       if (eventBeingMoved && eventBeingMoved.forbiddenZone) {
         const forbiddenStart = moment(eventBeingMoved.forbiddenZone.start);
         const forbiddenEnd = moment(eventBeingMoved.forbiddenZone.end);
