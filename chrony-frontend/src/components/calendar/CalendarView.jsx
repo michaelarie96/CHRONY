@@ -36,10 +36,11 @@ const WeeklyView = () => {
   const [scrollPosition, setScrollPosition] = useState(0);
   const [showMovedEventsModal, setShowMovedEventsModal] = useState(false);
   const [movedEventsData, setMovedEventsData] = useState([]);
+  const [loading, setLoading] = useState(false);
   const calendarRef = useRef(null);
   
   // Get notification functions
-  const { showSuccess, showError, showMovedEventsNotification } = useNotification();
+  const { showSuccess, showError, showWarning, showMovedEventsNotification } = useNotification();
 
   // Show moved events details modal
   const handleShowMovedEventsDetails = () => {
@@ -48,14 +49,25 @@ const WeeklyView = () => {
 
   // Format moved events for display
   const formatMovedEventDetails = (movedEvents) => {
-    return movedEvents.map(event => {
+    if (!movedEvents || movedEvents.length === 0) return [];
+    
+    return movedEvents.map((event, index) => {
       const eventType = eventTypes[event.type] || eventTypes.fixed;
+      
+      // Handle both new format (with timestamps) and old format
+      const originalTime = event.originalTime || 'Unknown time';
+      const newTime = event.start && event.end 
+        ? `${moment(event.start).format('dddd, MMM D')} at ${moment(event.start).format('h:mm A')} - ${moment(event.end).format('h:mm A')}`
+        : 'New time not available';
+      
       return {
-        title: event.title,
-        type: event.type,
+        id: event._id || event.id || `moved-${index}`,
+        title: event.title || 'Untitled Event',
+        type: event.type || 'fixed',
         typeColor: eventType.color,
         typeName: eventType.name,
-        newTime: `${moment(event.start).format('dddd, MMM D')} at ${moment(event.start).format('h:mm A')} - ${moment(event.end).format('h:mm A')}`
+        originalTime,
+        newTime
       };
     });
   };
@@ -66,9 +78,12 @@ const WeeklyView = () => {
       const user = JSON.parse(localStorage.getItem("user"));
       if (!user || !user.userId) {
         console.error("No user found in localStorage");
+        showError("Authentication Error", "Please log in again");
         return;
       }
 
+      setLoading(true);
+      
       // Calculate date range for the current view
       const viewStart = moment(currentDate).startOf(currentView).toISOString();
       const viewEnd = moment(currentDate).endOf(currentView).toISOString();
@@ -76,24 +91,28 @@ const WeeklyView = () => {
       const response = await fetch(
         `http://localhost:3000/api/event?userId=${user.userId}&start=${viewStart}&end=${viewEnd}`
       );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
 
-      if (response.ok) {
-        const processedEvents = data.map((ev) => ({
-          ...ev,
-          id: ev._id || ev.id,
-          start: new Date(ev.start),
-          end: new Date(ev.end),
-        }));
+      const processedEvents = data.map((ev) => ({
+        ...ev,
+        id: ev._id || ev.id,
+        start: new Date(ev.start),
+        end: new Date(ev.end),
+      }));
 
-        setEvents(processedEvents);
-      } else {
-        console.error("Failed to load events:", data.error);
-        showError("Error", "Failed to load events");
-      }
+      setEvents(processedEvents);
+      console.log(`📅 Loaded ${processedEvents.length} events for ${currentView} view`);
+      
     } catch (error) {
       console.error("Error loading events:", error);
       showError("Network Error", "Failed to load events. Please check your connection.");
+    } finally {
+      setLoading(false);
     }
   }, [currentDate, currentView, showError]);
 
@@ -105,11 +124,19 @@ const WeeklyView = () => {
   const handleSaveEvent = async (eventData) => {
     try {
       const user = JSON.parse(localStorage.getItem("user"));
+      if (!user || !user.userId) {
+        showError("Authentication Error", "Please log in again");
+        return;
+      }
 
+      setLoading(true);
+      
       const completeEventData = {
         ...eventData,
         user: user.userId,
       };
+
+      console.log(`🎯 ${selectedEvent ? 'Updating' : 'Creating'} ${eventData.type} event: ${eventData.title}`);
 
       let response;
       if (selectedEvent) {
@@ -138,13 +165,32 @@ const WeeklyView = () => {
       if (!response.ok) {
         // Handle different types of errors
         const errorData = await response.json();
+        console.error("API Error:", errorData);
         
         if (response.status === 409) {
           // Scheduling conflict
-          showError("Scheduling Conflict", errorData.error || "Cannot schedule event due to conflicts");
+          showError("Scheduling Conflict", 
+            errorData.error || "Cannot schedule event due to conflicts",
+            { 
+              autoClose: false,
+              actionText: errorData.suggestion ? "View Suggestion" : null,
+              onAction: errorData.suggestion ? () => {
+                showWarning("Suggestion", errorData.suggestion);
+              } : null
+            }
+          );
         } else if (response.status === 400) {
           // Validation or constraint error
-          showError("Invalid Event", errorData.error || "Event cannot be scheduled with current settings");
+          showError("Invalid Event", 
+            errorData.error || "Event cannot be scheduled with current settings",
+            { 
+              autoClose: false,
+              actionText: errorData.suggestion ? "View Suggestion" : null,
+              onAction: errorData.suggestion ? () => {
+                showWarning("Suggestion", errorData.suggestion);
+              } : null
+            }
+          );
         } else {
           // General error
           showError("Error", errorData.error || "Failed to save event");
@@ -153,7 +199,7 @@ const WeeklyView = () => {
       }
 
       const result = await response.json();
-      console.log("Event API response:", result);
+      console.log("✅ Event API response:", result);
 
       // Handle the new API response format
       if (result.success) {
@@ -165,7 +211,7 @@ const WeeklyView = () => {
           end: new Date(event.end),
         }));
 
-        // Update the events state
+        // Update events state with new/updated events
         if (selectedEvent) {
           // Update existing event
           setEvents(prevEvents => 
@@ -180,7 +226,7 @@ const WeeklyView = () => {
 
         // Handle moved events notification
         if (result.movedEvents && result.movedEvents.length > 0) {
-          console.log("Events were moved:", result.movedEvents);
+          console.log("📋 Events were moved:", result.movedEvents);
           
           // Store moved events data for modal
           setMovedEventsData(result.movedEvents);
@@ -188,30 +234,42 @@ const WeeklyView = () => {
           // Show moved events notification
           showMovedEventsNotification(
             result.movedEvents,
-            result.message,
+            result.message || `${result.movedEvents.length} event${result.movedEvents.length > 1 ? 's were' : ' was'} automatically rescheduled`,
             handleShowMovedEventsDetails
           );
         } else {
           // Show simple success notification
           const eventAction = selectedEvent ? "updated" : "created";
-          showSuccess("Success", `Event ${eventAction} successfully`);
+          const eventType = eventData.type || 'event';
+          showSuccess(
+            "Success", 
+            `${eventType.charAt(0).toUpperCase() + eventType.slice(1)} event "${eventData.title}" ${eventAction} successfully`
+          );
         }
 
         // Refresh events to ensure consistency
         await fetchUserEvents();
+        
+        // Close form
+        setShowForm(false);
+        setSelectedEvent(null);
+        setSelectedSlot(null);
+        
       } else {
         showError("Error", result.error || "Failed to save event");
       }
     } catch (error) {
       console.error("Error saving event:", error);
       showError("Network Error", "Failed to save event. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-
-    setShowForm(false);
   };
 
   const handleDeleteEvent = async (eventId) => {
     try {
+      setLoading(true);
+      
       const response = await fetch(
         `http://localhost:3000/api/event/${eventId}`,
         {
@@ -220,22 +278,36 @@ const WeeklyView = () => {
       );
 
       if (response.ok) {
-        console.log("Event deleted successfully");
+        const result = await response.json();
+        console.log("🗑️ Event deleted successfully:", result);
+        
+        // Find deleted event for notification
+        const deletedEvent = events.find(e => e.id === eventId);
+        
         // Remove deleted event from the local events state
         setEvents(events.filter(event => event.id !== eventId));
         
         // Show success notification
-        showSuccess("Success", "Event deleted successfully");
+        showSuccess(
+          "Event Deleted", 
+          `"${deletedEvent?.title || 'Event'}" has been deleted successfully`
+        );
+        
+        // Close form
+        setShowForm(false);
+        setSelectedEvent(null);
+        
       } else {
-        console.error("Failed to delete event");
-        showError("Error", "Failed to delete event");
+        const errorData = await response.json();
+        console.error("Failed to delete event:", errorData);
+        showError("Delete Failed", errorData.error || "Failed to delete event");
       }
     } catch (error) {
       console.error("Error deleting event:", error);
       showError("Network Error", "Failed to delete event. Please check your connection.");
+    } finally {
+      setLoading(false);
     }
-
-    setShowForm(false);
   };
 
   // Function to find the scrollable container in react-big-calendar
@@ -321,6 +393,13 @@ const WeeklyView = () => {
     setCurrentView(view);
   };
 
+  // Handler for closing form
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setSelectedEvent(null);
+    setSelectedSlot(null);
+  };
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-full">
       <div className="flex justify-between items-center mb-6">
@@ -332,9 +411,19 @@ const WeeklyView = () => {
             setSelectedSlot({ start: new Date(), end: new Date() });
             setShowForm(true);
           }}
-          className="bg-gradient-to-r from-[#00AFB9] to-[#0081A7] hover:bg-gradient-to-l text-white hover:text-gray-800 py-2 px-4 rounded flex items-center transition-all duration-300 hover:shadow-md font-medium"
+          disabled={loading}
+          className="bg-gradient-to-r from-[#00AFB9] to-[#0081A7] hover:bg-gradient-to-l text-white hover:text-gray-800 py-2 px-4 rounded flex items-center transition-all duration-300 hover:shadow-md font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span className="mr-1 text-lg">+</span> Add Event
+          {loading ? (
+            <>
+              <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+              Processing...
+            </>
+          ) : (
+            <>
+              <span className="mr-1 text-lg">+</span> Add Event
+            </>
+          )}
         </button>
       </div>
 
@@ -351,15 +440,24 @@ const WeeklyView = () => {
                 : null)
             }
             onSave={handleSaveEvent}
-            onCancel={() => setShowForm(false)}
+            onCancel={handleCloseForm}
             onDelete={handleDeleteEvent}
           />
         </div>
       ) : (
         <div
-          className="bg-white rounded-lg shadow-sm border border-gray-100 h-[75vh]"
+          className="bg-white rounded-lg shadow-sm border border-gray-100 h-[75vh] relative"
           ref={calendarRef}
         >
+          {loading && (
+            <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin h-6 w-6 border-2 border-[#00AFB9] border-t-transparent rounded-full"></div>
+                <span className="text-gray-600">Loading events...</span>
+              </div>
+            </div>
+          )}
+          
           <Calendar
             localizer={localizer}
             events={events}
@@ -395,34 +493,47 @@ const WeeklyView = () => {
       {/* Moved Events Modal */}
       {showMovedEventsModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Events Automatically Moved
+              Events Automatically Rescheduled
             </h3>
             <p className="text-sm text-gray-600 mb-4">
-              The following events were rescheduled to make room for your new event:
+              The following events were moved to make room for your new event:
             </p>
             
             <div className="space-y-3 mb-6">
               {formatMovedEventDetails(movedEventsData).map((event, index) => (
-                <div key={index} className="flex items-start p-3 bg-gray-50 rounded">
-                  <div className="flex-shrink-0 mr-3">
-                    <span 
-                      className="inline-block w-3 h-3 rounded-full"
-                      style={{ backgroundColor: event.typeColor }}
-                    ></span>
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-800">{event.title}</div>
-                    <div className="text-sm text-gray-600">
-                      <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs mr-2">
-                        {event.typeName}
-                      </span>
-                      {event.newTime}
+                <div key={event.id || index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0 mr-3 mt-1">
+                      <span 
+                        className="inline-block w-3 h-3 rounded-full"
+                        style={{ backgroundColor: event.typeColor }}
+                      ></span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-800 mb-1">{event.title}</div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div>
+                          <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs mr-2">
+                            {event.typeName}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-medium">New time:</span> {event.newTime}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               ))}
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-blue-800">
+                <strong>💡 Smart Scheduling:</strong> These events were automatically moved based on their flexibility settings. 
+                Fixed events can't be moved, flexible events stay on the same day, and fluid events can move anywhere in the week.
+              </p>
             </div>
             
             <div className="flex justify-end">
