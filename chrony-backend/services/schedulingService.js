@@ -327,10 +327,11 @@ class SchedulingService {
     let currentExistingEvents = [...existingEvents];
 
     // Create a "forbidden zone" - the target event's time slot
-    const forbiddenZone = {
-      start: targetEvent.start,
-      end: targetEvent.end,
-    };
+      const initialForbiddenZones = [];
+      initialForbiddenZones.push({
+        start: targetEvent.start,
+        end: targetEvent.end,
+      });
 
     // Process fluid conflicts first
     for (const fluidEvent of fluidConflicts) {
@@ -346,7 +347,7 @@ class SchedulingService {
           e.id !== fluidEvent.id
       );
 
-      // Create the event object more carefully
+      // Create the event object explicitly
       const eventToMove = {
         _id: fluidEvent._id,
         id: fluidEvent.id,
@@ -357,7 +358,7 @@ class SchedulingService {
         duration: fluidEvent.duration,
         description: fluidEvent.description,
         user: fluidEvent.user,
-        forbiddenZone: forbiddenZone,
+        forbiddenZones: initialForbiddenZones,
       };
 
       console.log(
@@ -365,7 +366,7 @@ class SchedulingService {
         {
           title: eventToMove.title,
           type: eventToMove.type,
-          hasForbiddenZone: !!eventToMove.forbiddenZone,
+          hasForbiddenZone: !!eventToMove.forbiddenZones,
         }
       );
 
@@ -402,7 +403,7 @@ class SchedulingService {
           e.id !== flexibleEvent.id
       );
 
-      // Create the event object more carefully
+      // Create the event object explicitly
       const eventToMove = {
         _id: flexibleEvent._id,
         id: flexibleEvent.id,
@@ -413,7 +414,7 @@ class SchedulingService {
         duration: flexibleEvent.duration,
         description: flexibleEvent.description,
         user: flexibleEvent.user,
-        forbiddenZone: forbiddenZone,
+        forbiddenZones: initialForbiddenZones,
       };
 
       console.log(
@@ -421,7 +422,7 @@ class SchedulingService {
         {
           title: eventToMove.title,
           type: eventToMove.type,
-          hasForbiddenZone: !!eventToMove.forbiddenZone,
+          hasForbiddenZone: !!eventToMove.forbiddenZones,
         }
       );
 
@@ -663,8 +664,21 @@ class SchedulingService {
           e.id !== fluidEvent.id
       );
 
+      const eventToMove = {
+        _id: fluidEvent._id,
+        id: fluidEvent.id,
+        title: fluidEvent.title,
+        type: fluidEvent.type,
+        start: fluidEvent.start,
+        end: fluidEvent.end,
+        duration: fluidEvent.duration,
+        description: fluidEvent.description,
+        user: fluidEvent.user,
+        forbiddenZones: event.forbiddenZones ? event.forbiddenZones : [],
+      };
+
       const moveResult = await this.placeEventWithCascading(
-        fluidEvent,
+        eventToMove,
         eventsWithoutFluid,
         userSettings,
         depth + 1
@@ -724,7 +738,12 @@ class SchedulingService {
     depth
   ) {
     // Calculate gaps only when needed (after direct replacement failed)
-    const gaps = this.calculateDayGaps(targetDate, dayEvents, userSettings);
+    const gaps = this.calculateDayGaps(
+      targetDate,
+      dayEvents,
+      userSettings,
+      event
+    );
     console.log(
       `${"  ".repeat(depth)}  📏 Calculated ${
         gaps.length
@@ -770,10 +789,16 @@ class SchedulingService {
           );
 
           // Forbidden zone = the gap itself (where the flexible event will be placed)
-          const forbiddenZone = {
+          const gapForbiddenZone = {
             start: gap.start,
             end: gap.end,
           };
+
+          const parentForbiddenZones = event.forbiddenZones
+            ? event.forbiddenZones
+            : [];
+          const newForbiddenZones = [...parentForbiddenZones];
+          newForbiddenZones.push(gapForbiddenZone);
 
           // Create event object explicitly
           const eventToMove = {
@@ -786,7 +811,7 @@ class SchedulingService {
             duration: fluidEvent.duration,
             description: fluidEvent.description,
             user: fluidEvent.user,
-            forbiddenZone: forbiddenZone,
+            forbiddenZones: newForbiddenZones,
           };
 
           const moveResult = await this.placeEventWithCascading(
@@ -860,8 +885,16 @@ class SchedulingService {
       for (let j = i + 1; j < fluidEvents.length; j++) {
         const event1 = fluidEvents[i];
         const event2 = fluidEvents[j];
-        const event1Duration = Math.floor(event1.duration / 60);
-        const event2Duration = Math.floor(event2.duration / 60);
+        const event1Duration = event1.duration
+          ? Math.floor(event1.duration / 60)
+          : Math.floor(
+              (new Date(event1.end) - new Date(event1.start)) / (1000 * 60)
+            );
+        const event2Duration = event2.duration
+          ? Math.floor(event2.duration / 60)
+          : Math.floor(
+              (new Date(event2.end) - new Date(event2.start)) / (1000 * 60)
+            );
 
         // Skip if either event would be a direct replacement (already tried)
         if (
@@ -902,10 +935,14 @@ class SchedulingService {
       );
 
       // Create a forbidden zone for event2 - should be on the original time of event1
-      const forbiddenZone = {
+      const immediateForbiddenZone = {
         start: event1.start,
         end: event1.end,
       };
+
+      const parentForbiddenZones = event.forbiddenZones
+        ? event.forbiddenZones
+        : [];
 
       let currentEventsForPair = [...existingEvents];
       const allMovedEvents = [];
@@ -915,9 +952,22 @@ class SchedulingService {
           e._id?.toString() !== event1._id?.toString() && e.id !== event1.id
       );
 
+      const eventToMove1 = {
+        _id: event1._id,
+        id: event1.id,
+        title: event1.title,
+        type: event1.type,
+        start: event1.start,
+        end: event1.end,
+        duration: event1.duration,
+        description: event1.description,
+        user: event1.user,
+        forbiddenZones: parentForbiddenZones,
+      };
+
       // Try to move first event
       const move1Result = await this.placeEventWithCascading(
-        event1,
+        eventToMove1,
         [...currentEventsForPair, ...allMovedEvents],
         userSettings,
         depth + 1
@@ -940,6 +990,9 @@ class SchedulingService {
           e._id?.toString() !== event2._id?.toString() && e.id !== event2.id
       );
 
+      const event2ForbiddenZones = [...parentForbiddenZones];
+      event2ForbiddenZones.push(immediateForbiddenZone);
+
       const eventToMove2 = {
         _id: event2._id,
         id: event2.id,
@@ -950,7 +1003,7 @@ class SchedulingService {
         duration: event2.duration,
         description: event2.description,
         user: event2.user,
-        forbiddenZone: forbiddenZone,
+        forbiddenZones: event2ForbiddenZones,
       };
 
       // Try to move second event
@@ -974,7 +1027,7 @@ class SchedulingService {
       );
 
       // Try to place the flexible event
-      const newExistingEvents = [...eventsWithoutPair, ...allMovedEvents];
+      const newExistingEvents = [...currentEventsForPair, ...allMovedEvents];
       const placementResult = this.tryDirectFlexiblePlacement(
         event,
         newExistingEvents,
@@ -1002,6 +1055,122 @@ class SchedulingService {
     }
 
     return { success: false };
+  }
+
+  /**
+   * Calculate available time gaps between events on a specific day
+   * Excludes forbidden zones and original event slots (same logic as forwardCheck)
+   */
+  calculateDayGaps(
+    dateString,
+    dayEvents,
+    userSettings,
+    eventBeingMoved = null
+  ) {
+    const gaps = [];
+    const dayStart = moment(`${dateString} ${userSettings.activeStartTime}`);
+    const dayEnd = moment(`${dateString} ${userSettings.activeEndTime}`);
+
+    // Create exclusion zones (forbidden zone + original slot)
+    const exclusionZones = [];
+
+    // Add original slot (where event being moved currently is)
+    if (eventBeingMoved && eventBeingMoved._id) {
+      exclusionZones.push({
+        start: moment(eventBeingMoved.start),
+        end: moment(eventBeingMoved.end),
+        reason: "original slot",
+      });
+    }
+
+    // Add forbidden zone (where target event will be placed)
+    if (eventBeingMoved && eventBeingMoved.forbiddenZones) {
+      eventBeingMoved.forbiddenZones.forEach((forbiddenZone, index) => {
+        exclusionZones.push({
+          start: moment(forbiddenZone.start),
+          end: moment(forbiddenZone.end),
+          reason: `forbidden zone ${index + 1}`,
+        });
+      });
+    }
+
+    // Filter out the event being moved from dayEvents
+    const filteredEvents = dayEvents.filter((e) => {
+      if (eventBeingMoved && eventBeingMoved._id) {
+        return (
+          e._id?.toString() !== eventBeingMoved._id?.toString() &&
+          e.id !== eventBeingMoved.id
+        );
+      }
+      return true;
+    });
+
+    // Combine filtered events with exclusion zones for gap calculation
+    const allBlockedTimes = [
+      ...filteredEvents.map((e) => ({
+        start: moment(e.start),
+        end: moment(e.end),
+        reason: `event: ${e.title}`,
+      })),
+      ...exclusionZones,
+    ];
+
+    // Sort all blocked times by start time
+    const sortedBlocked = allBlockedTimes.sort((a, b) => a.start.diff(b.start));
+
+    console.log(
+      `📏 Calculating gaps for ${dateString}, excluding:`,
+      sortedBlocked
+        .map(
+          (b) =>
+            `${b.start.format("HH:mm")}-${b.end.format("HH:mm")} (${b.reason})`
+        )
+        .join(", ")
+    );
+
+    let currentTime = dayStart.clone();
+
+    for (const blocked of sortedBlocked) {
+      // If there's a gap before this blocked time
+      if (currentTime.isBefore(blocked.start)) {
+        const gapDuration = blocked.start.diff(currentTime, "minutes");
+
+        if (gapDuration >= this.SLOT_DURATION_MINUTES) {
+          gaps.push({
+            start: currentTime.clone(),
+            end: blocked.start.clone(),
+            durationMinutes: gapDuration,
+          });
+        }
+      }
+
+      // Move current time to end of this blocked time
+      if (blocked.end.isAfter(currentTime)) {
+        currentTime = blocked.end.clone();
+      }
+    }
+
+    // Check for gap after last blocked time until end of day
+    if (currentTime.isBefore(dayEnd)) {
+      const finalGapDuration = dayEnd.diff(currentTime, "minutes");
+
+      if (finalGapDuration >= this.SLOT_DURATION_MINUTES) {
+        gaps.push({
+          start: currentTime.clone(),
+          end: dayEnd.clone(),
+          durationMinutes: finalGapDuration,
+        });
+      }
+    }
+
+    console.log(
+      `📏 Found ${gaps.length} usable gaps on ${dateString}:`,
+      gaps
+        .map((g) => `${g.durationMinutes}min at ${g.start.format("HH:mm")}`)
+        .join(", ")
+    );
+
+    return gaps;
   }
 
   /**
@@ -1158,16 +1327,25 @@ class SchedulingService {
         }
       }
 
-      // NEW: Avoid forbidden zone (target event's time)
-      if (eventBeingMoved && eventBeingMoved.forbiddenZone) {
-        const forbiddenStart = moment(eventBeingMoved.forbiddenZone.start);
-        const forbiddenEnd = moment(eventBeingMoved.forbiddenZone.end);
+      // Avoid forbidden zones
+      if (eventBeingMoved && eventBeingMoved.forbiddenZones) {
+        let hasConflictWithForbiddenZones = false;
 
-        if (
-          proposedStart.isBefore(forbiddenEnd) &&
-          proposedEnd.isAfter(forbiddenStart)
-        ) {
-          continue; // Skip this slot, it's reserved for the target event
+        for (const forbiddenZone of eventBeingMoved.forbiddenZones) {
+          const forbiddenStart = moment(forbiddenZone.start);
+          const forbiddenEnd = moment(forbiddenZone.end);
+
+          if (
+            proposedStart.isBefore(forbiddenEnd) &&
+            proposedEnd.isAfter(forbiddenStart)
+          ) {
+            hasConflictWithForbiddenZones = true;
+            break;
+          }
+        }
+
+        if (hasConflictWithForbiddenZones) {
+          continue; // Skip this slot, it conflicts with forbidden zones
         }
       }
 
