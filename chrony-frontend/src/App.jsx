@@ -26,14 +26,23 @@ function App() {
     }
   }, []);
 
-  const handleLoginSuccess = (username, userId) => {
+  const handleLoginSuccess = (loginResponse) => {
+    console.log("Login response received:", loginResponse);
+
     const newUser = {
-      username,
-      userId,
-      setupCompleted: false, // New users always need setup
+      username: loginResponse.username,
+      userId: loginResponse.userId,
+      settings: loginResponse.settings,
+      setupCompleted: loginResponse.setupCompleted || false,
     };
+
+    console.log("Setting user data:", newUser);
+
+    // Store in localStorage
+    localStorage.setItem("user", JSON.stringify(newUser));
+
     setUser(newUser);
-    setNeedsSetup(true); // Force setup for new login
+    setNeedsSetup(!newUser.setupCompleted);
   };
 
   const handleSetupComplete = (updatedUser) => {

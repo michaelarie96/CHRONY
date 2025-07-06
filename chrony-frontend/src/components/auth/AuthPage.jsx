@@ -29,7 +29,8 @@ const AuthPage = ({ onLoginSuccess }) => {
       }
 
       if (isLogin) {
-        onLoginSuccess(data.username, data.userId);
+        // Pass the complete response data to parent
+        onLoginSuccess(data);
       } else {
         setIsLogin(true);
         setError("Registration successful! Please log in.");

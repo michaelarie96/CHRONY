@@ -11,6 +11,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Track if user has completed the initial setup process
+  setupCompleted: {
+    type: Boolean,
+    default: false
+  },
   // User settings for scheduling algorithm
   settings: {
     activeStartTime: {

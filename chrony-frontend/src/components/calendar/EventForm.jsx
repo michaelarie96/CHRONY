@@ -29,6 +29,9 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
     const [fluidDuration, setFluidDuration] = useState(
         event?.duration ? Math.floor(event.duration / 60) : 30 // duration in minutes
     );
+    const [fluidWeek, setFluidWeek] = useState(
+        event?.targetWeek || 'current' // current, plus1weeks, plus2weeks, etc.
+    );
     
     // Recurrence state
     const [recurrenceEnabled, setRecurrenceEnabled] = useState(event?.recurrence?.enabled || false);
@@ -46,6 +49,37 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
         flexible: { name: "Flexible", color: "#00AFB9", bgColor: "#00AFB920", description: "Specific day, flexible time" },
         fluid: { name: "Fluid", color: "#F07167", bgColor: "#F0716720", description: "Anywhere this week" }
     };
+
+    // Generate week options for fluid events
+    const generateWeekOptions = () => {
+        const options = [];
+        const today = moment();
+        
+        for (let i = 0; i < 4; i++) { // Show 4 weeks: current + 3 future weeks
+            const weekStart = today.clone().add(i, 'weeks').startOf('week'); // Sunday
+            const weekEnd = weekStart.clone().endOf('week'); // Saturday
+            
+            let label;
+            if (i === 0) {
+                label = `This week (${weekStart.format('MMM D')} - ${weekEnd.format('MMM D')})`;
+            } else if (i === 1) {
+                label = `Next week (${weekStart.format('MMM D')} - ${weekEnd.format('MMM D')})`;
+            } else {
+                label = `In ${i} weeks (${weekStart.format('MMM D')} - ${weekEnd.format('MMM D')})`;
+            }
+            
+            options.push({
+                value: i === 0 ? 'current' : `plus${i}weeks`,
+                label: label,
+                weekStart: weekStart.toDate(),
+                weekEnd: weekEnd.toDate()
+            });
+        }
+        
+        return options;
+    };
+
+    const weekOptions = generateWeekOptions();
 
     // Calculate start and end dates based on event type
     const calculateEventTimes = () => {
@@ -71,13 +105,27 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
             }
                 
             case 'fluid': {
-                // For fluid events, we use the start of the current week as placeholder
-                const weekStart = now.clone().startOf('week').add(9, 'hours'); // 9 AM Monday
-                const fluidEnd = moment(weekStart).add(fluidDuration, 'minutes');
+                // For fluid events, calculate the target week start based on selection
+                let targetWeekStart;
+                
+                if (fluidWeek === 'current') {
+                    targetWeekStart = now.clone().startOf('week');
+                } else {
+                    // Extract number from 'plus1weeks', 'plus2weeks', etc.
+                    const weeksToAdd = parseInt(fluidWeek.replace('plus', '').replace('weeks', ''));
+                    targetWeekStart = now.clone().add(weeksToAdd, 'weeks').startOf('week');
+                }
+                
+                // Use Monday 9 AM of the target week as placeholder
+                const fluidStart = targetWeekStart.clone().add(1, 'day').add(9, 'hours'); // Monday 9 AM
+                const fluidEnd = moment(fluidStart).add(fluidDuration, 'minutes');
+                
                 return { 
-                    start: weekStart.toDate(), 
+                    start: fluidStart.toDate(), 
                     end: fluidEnd.toDate(),
-                    duration: fluidDuration * 60 // store duration in seconds
+                    duration: fluidDuration * 60, // store duration in seconds
+                    targetWeek: fluidWeek, // Include the target week info
+                    targetWeekStart: targetWeekStart.toDate() // Include actual week start date
                 };
             }
                 
@@ -111,7 +159,7 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
             return;
         }
         
-        const { start, end, duration } = calculateEventTimes();
+        const { start, end, duration, targetWeek, targetWeekStart } = calculateEventTimes();
         
         const eventData = {
             id: event?.id || Date.now(),
@@ -128,6 +176,12 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
                 count
             } : { enabled: false }
         };
+
+        // Add fluid-specific fields if it's a fluid event
+        if (type === 'fluid') {
+            eventData.targetWeek = targetWeek;
+            eventData.targetWeekStart = targetWeekStart;
+        }
         
         onSave(eventData);
     };
@@ -213,22 +267,40 @@ const EventForm = ({ event, onSave, onCancel, onDelete }) => {
                 
             case 'fluid':
                 return (
-                    <div className="mb-4">
-                        <label className="block mb-1 font-medium">Duration (minutes)</label>
-                        <input
-                            type="number"
-                            min="15"
-                            max="480"
-                            step="15"
-                            className="w-full border px-3 py-2 rounded"
-                            value={fluidDuration}
-                            onChange={(e) => setFluidDuration(parseInt(e.target.value))}
-                            required
-                        />
-                        <p className="text-sm text-gray-500 mt-1">
-                            The system will find the best time this week
-                        </p>
-                    </div>
+                    <>
+                        <div className="mb-4">
+                            <label className="block mb-1 font-medium">Duration (minutes)</label>
+                            <input
+                                type="number"
+                                min="15"
+                                max="480"
+                                step="15"
+                                className="w-full border px-3 py-2 rounded"
+                                value={fluidDuration}
+                                onChange={(e) => setFluidDuration(parseInt(e.target.value))}
+                                required
+                            />
+                        </div>
+                        
+                        <div className="mb-4">
+                            <label className="block mb-1 font-medium">Target Week</label>
+                            <select
+                                className="w-full border px-3 py-2 rounded"
+                                value={fluidWeek}
+                                onChange={(e) => setFluidWeek(e.target.value)}
+                                required
+                            >
+                                {weekOptions.map(option => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-sm text-gray-500 mt-1">
+                                The system will find the best time during the selected week
+                            </p>
+                        </div>
+                    </>
                 );
                 
             default:

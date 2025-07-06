@@ -168,7 +168,7 @@ class SchedulingService {
     );
   }
 
-  /**
+/**
    * Place a flexible event - can move within same day, may need to move fluid events
    */
   async placeFlexibleEventWithCascading(
@@ -178,11 +178,24 @@ class SchedulingService {
     depth
   ) {
     const targetDate = moment(event.start).format("YYYY-MM-DD");
+    const targetDateMoment = moment(targetDate);
+    const now = moment();
     const durationMinutes = event.duration
       ? Math.floor(event.duration / 60)
       : Math.floor((new Date(event.end) - new Date(event.start)) / (1000 * 60));
 
-    // Check basic constraints
+    console.log(`${"  ".repeat(depth)}📅 Flexible event target date: ${targetDate}`);
+
+    // Check if trying to schedule on a past date
+    if (targetDateMoment.isBefore(now, 'day')) {
+      return {
+        success: false,
+        error: `Cannot schedule flexible events on past dates. Target date: ${targetDateMoment.format('dddd, MMM D, YYYY')}, Today: ${now.format('dddd, MMM D, YYYY')}`,
+        movedEvents: [],
+      };
+    }
+
+    // Check basic constraints (rest day, etc.)
     const constraintCheck = this.checkBasicConstraints(event, userSettings);
     if (!constraintCheck.valid) {
       return {
@@ -225,8 +238,8 @@ class SchedulingService {
     );
   }
 
-  /**
-   * Place a fluid event - lowest priority, try to find any available slot in week
+/**
+   * Place a fluid event - lowest priority, try to find any available slot in specified week
    */
   async placeFluidEventWithCascading(
     event,
@@ -237,16 +250,33 @@ class SchedulingService {
     const durationMinutes = event.duration
       ? Math.floor(event.duration / 60)
       : Math.floor((new Date(event.end) - new Date(event.start)) / (1000 * 60));
-    const weekStart = moment(event.start).startOf("week");
+    
+    // Use targetWeekStart if provided, otherwise default to current week
+    let weekStart;
+    if (event.targetWeekStart) {
+      weekStart = moment(event.targetWeekStart);
+      console.log(`${"  ".repeat(depth)}🌊 Using specified week: ${weekStart.format('MMM D, YYYY')}`);
+    } else {
+      weekStart = moment(event.start).startOf("week");
+      console.log(`${"  ".repeat(depth)}🌊 Using default week from event start`);
+    }
 
     console.log(
       `${"  ".repeat(
         depth
-      )}🌊 Finding ${durationMinutes}min slot anywhere this week`
+      )}🌊 Finding ${durationMinutes}min slot in week ${weekStart.format('MMM D')} - ${weekStart.clone().endOf('week').format('MMM D')}`
     );
 
-    // Get working days (excluding rest day)
+    // Get working days (excluding rest day and past days)
     const workingDays = this.getWorkingDays(weekStart, userSettings.restDay);
+
+    if (workingDays.length === 0) {
+      return {
+        success: false,
+        error: `No working days available in the selected week (${weekStart.format('MMM D')} - ${weekStart.clone().endOf('week').format('MMM D')})`,
+        movedEvents: [],
+      };
+    }
 
     // Try each day until we find a solution
     for (const day of workingDays) {
@@ -273,7 +303,7 @@ class SchedulingService {
 
         console.log(
           `${"  ".repeat(depth)}✅ Fluid event placed: ${day.format(
-            "dddd"
+            "dddd, MMM D"
           )} ${bestSlot.start.format("HH:mm")}`
         );
         return {
@@ -287,7 +317,7 @@ class SchedulingService {
     // No available slots in the week
     return {
       success: false,
-      error: `No available ${durationMinutes}-minute slots in the working week`,
+      error: `No available ${durationMinutes}-minute slots in the selected week (${weekStart.format('MMM D')} - ${weekStart.clone().endOf('week').format('MMM D')})`,
       movedEvents: [],
     };
   }
@@ -327,11 +357,11 @@ class SchedulingService {
     let currentExistingEvents = [...existingEvents];
 
     // Create a "forbidden zone" - the target event's time slot
-      const initialForbiddenZones = [];
-      initialForbiddenZones.push({
-        start: targetEvent.start,
-        end: targetEvent.end,
-      });
+    const initialForbiddenZones = [];
+    initialForbiddenZones.push({
+      start: targetEvent.start,
+      end: targetEvent.end,
+    });
 
     // Process fluid conflicts first
     for (const fluidEvent of fluidConflicts) {
@@ -455,12 +485,35 @@ class SchedulingService {
     };
   }
 
-  /**
-   * Check basic constraints (rest day, active hours) without considering conflicts
+/**
+   * Check basic constraints (rest day, active hours, past time) without considering conflicts
    */
   checkBasicConstraints(event, userSettings) {
-    // Check if event is on rest day
-    const eventDay = moment(event.start).day(); // 0 = Sunday, 6 = Saturday
+    const now = moment();
+    const eventStart = moment(event.start);
+    const eventEnd = moment(event.end);
+    
+    // Only check past time for FIXED events (flexible/fluid use placeholder times)
+    if (event.type === 'fixed') {
+      // Check if fixed event is trying to be scheduled in the past
+      if (eventEnd.isBefore(now)) {
+        return {
+          valid: false,
+          error: `Cannot schedule events in the past. Event ends at ${eventEnd.format('dddd, MMM D [at] h:mm A')} but current time is ${now.format('dddd, MMM D [at] h:mm A')}`
+        };
+      }
+      
+      // For fixed events, be strict about start time being in the past
+      if (eventStart.isBefore(now)) {
+        return {
+          valid: false,
+          error: `Fixed events cannot start in the past. Requested start time: ${eventStart.format('dddd, MMM D [at] h:mm A')}, Current time: ${now.format('dddd, MMM D [at] h:mm A')}`
+        };
+      }
+    }
+
+    // Check if event is on rest day (for all event types)
+    const eventDay = eventStart.day(); // 0 = Sunday, 6 = Saturday
     const restDayNumber = userSettings.restDay === "sunday" ? 0 : 6;
 
     if (eventDay === restDayNumber) {
@@ -470,10 +523,12 @@ class SchedulingService {
       };
     }
 
-    // Check if event fits within active hours
-    if (!this.isWithinActiveHours(event.start, event.end, userSettings)) {
-      const startTime = moment(event.start).format("HH:mm");
-      const endTime = moment(event.end).format("HH:mm");
+    // Check if event fits within active hours (for all event types)
+    // Note: For flexible/fluid events, this checks placeholder times, but that's okay
+    // because the actual scheduling will respect active hours anyway
+    if (event.type === 'fixed' && !this.isWithinActiveHours(event.start, event.end, userSettings)) {
+      const startTime = eventStart.format("HH:mm");
+      const endTime = eventEnd.format("HH:mm");
       return {
         valid: false,
         error: `Event ${startTime}-${endTime} is outside active hours ${userSettings.activeStartTime}-${userSettings.activeEndTime}`,
@@ -1223,13 +1278,38 @@ class SchedulingService {
 
   /**
    * Generate all possible time slots for a day based on user settings
+   * Excludes past time slots to prevent scheduling in the past
    */
   generateDayTimeSlots(dateString, userSettings) {
     const slots = [];
+    const now = moment();
+    const targetDate = moment(dateString);
+    const isToday = targetDate.isSame(now, "day");
+
     const startTime = moment(`${dateString} ${userSettings.activeStartTime}`);
     const endTime = moment(`${dateString} ${userSettings.activeEndTime}`);
 
     let current = startTime.clone();
+
+    // If this is today, start from the next available slot after current time
+    if (isToday && current.isBefore(now)) {
+      // Round up to next slot boundary (e.g., if it's 10:07, start from 10:15)
+      const minutesToNextSlot =
+        this.SLOT_DURATION_MINUTES -
+        (now.minute() % this.SLOT_DURATION_MINUTES);
+      current = now.clone().add(minutesToNextSlot, "minutes").startOf("minute");
+
+      // Ensure we're still using slot boundaries (0, 15, 30, 45 minutes)
+      const roundedMinutes =
+        Math.ceil(current.minute() / this.SLOT_DURATION_MINUTES) *
+        this.SLOT_DURATION_MINUTES;
+      current.minute(roundedMinutes).second(0);
+
+      // If rounding pushed us to next hour, handle that
+      if (current.minute() >= 60) {
+        current.add(1, "hour").minute(0);
+      }
+    }
 
     // Generate slots up to (but not including) end time
     // This ensures events can't extend beyond active hours
@@ -1238,14 +1318,28 @@ class SchedulingService {
       current.add(this.SLOT_DURATION_MINUTES, "minutes");
     }
 
+    console.log(
+      `🕐 Generated ${slots.length} time slots for ${dateString}${
+        isToday ? " (today - excluding past)" : ""
+      }`
+    );
+    if (slots.length > 0) {
+      console.log(
+        `   First slot: ${slots[0].format("HH:mm")}, Last slot: ${slots[
+          slots.length - 1
+        ].format("HH:mm")}`
+      );
+    }
+
     return slots;
   }
 
   /**
-   * Get working days for the week (excluding rest day)
+   * Get working days for the week (excluding rest day and past days)
    */
   getWorkingDays(weekStart, restDay) {
     const days = [];
+    const now = moment();
     const restDayNumber = restDay === "sunday" ? 0 : 6; // Sunday = 0, Saturday = 6
 
     // Generate 7 days starting from week start (Sunday)
@@ -1253,11 +1347,25 @@ class SchedulingService {
       const day = weekStart.clone().add(i, "days");
 
       // Skip rest day
-      if (day.day() !== restDayNumber) {
-        days.push(day);
+      if (day.day() === restDayNumber) {
+        continue;
       }
+
+      // Skip days that are completely in the past
+      // A day is considered "past" if it's before today
+      if (day.isBefore(now, "day")) {
+        console.log(`🚫 Skipping past day: ${day.format("dddd, MMM D")}`);
+        continue;
+      }
+
+      days.push(day);
     }
 
+    console.log(
+      `📅 Working days for week ${weekStart.format("MMM D")}: ${days
+        .map((d) => d.format("ddd"))
+        .join(", ")}`
+    );
     return days;
   }
 
