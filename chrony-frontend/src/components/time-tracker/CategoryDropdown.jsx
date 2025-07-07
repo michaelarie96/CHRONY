@@ -1,16 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from "react";
 
-const CategoryDropdown = ({ 
-  categories, 
-  selectedCategory, 
-  onSelectCategory, 
+const CategoryDropdown = ({
+  categories,
+  selectedCategory,
+  onSelectCategory,
   onDeleteCategory,
   onAddCategory,
-  disabled = false 
+  disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showAddInput, setShowAddInput] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(null); // ID of category being confirmed for deletion
   const dropdownRef = useRef(null);
 
@@ -24,11 +24,13 @@ const CategoryDropdown = ({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const selectedCategoryName = categories.find(cat => cat.id === selectedCategory)?.name || 'Select Category';
+  const selectedCategoryName =
+    categories.find((cat) => cat.id === selectedCategory)?.name ||
+    "Select Category";
 
   const handleSelectCategory = (categoryId) => {
     onSelectCategory(categoryId);
@@ -51,21 +53,52 @@ const CategoryDropdown = ({
     setDeleteConfirm(null);
   };
 
-  const handleAddCategory = async () => {
+  // FIXED: Prevent form submission and improve add category handling
+  const handleAddCategory = async (e) => {
+    // Prevent any form submission or event bubbling
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     if (!newCategoryName.trim()) return;
-    
-    await onAddCategory(newCategoryName.trim());
-    setNewCategoryName('');
-    setShowAddInput(false);
-    // Keep dropdown open to show new category
+
+    try {
+      // Call the parent's add category function
+      await onAddCategory(newCategoryName.trim());
+
+      // Reset the input and close the add form
+      setNewCategoryName("");
+      setShowAddInput(false);
+
+      // KEEP the dropdown open so user can see the new category was added
+      // Don't close the dropdown: setIsOpen(false);
+    } catch (error) {
+      console.error("Error adding category:", error);
+      // Keep the input open if there was an error
+    }
   };
 
   const handleAddInputKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleAddCategory();
-    } else if (e.key === 'Escape') {
-      setNewCategoryName('');
+    if (e.key === "Enter") {
+      e.preventDefault(); // CRITICAL: Prevent form submission
+      e.stopPropagation();
+      handleAddCategory(e);
+    } else if (e.key === "Escape") {
+      setNewCategoryName("");
       setShowAddInput(false);
+    }
+  };
+
+  // FIXED: Prevent event bubbling on dropdown toggle
+  const handleDropdownToggle = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (!disabled) {
+      setIsOpen(!isOpen);
     }
   };
 
@@ -73,23 +106,30 @@ const CategoryDropdown = ({
     <div className="relative" ref={dropdownRef}>
       {/* Dropdown trigger button */}
       <button
-        type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        type="button" // CRITICAL: Ensure this is type="button" to prevent form submission
+        onClick={handleDropdownToggle}
         disabled={disabled}
         className={`w-full text-left border border-gray-300 rounded-l px-3 py-2 bg-white flex justify-between items-center ${
-          disabled ? 'bg-gray-100 cursor-not-allowed' : 'hover:bg-gray-50'
+          disabled ? "bg-gray-100 cursor-not-allowed" : "hover:bg-gray-50"
         }`}
       >
-        <span className={disabled ? 'text-gray-400' : 'text-gray-900'}>
-          {disabled ? 'Loading...' : selectedCategoryName}
+        <span className={disabled ? "text-gray-400" : "text-gray-900"}>
+          {disabled ? "Loading..." : selectedCategoryName}
         </span>
-        <svg 
-          className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
-          fill="none" 
-          stroke="currentColor" 
+        <svg
+          className={`w-4 h-4 transition-transform ${
+            isOpen ? "rotate-180" : ""
+          }`}
+          fill="none"
+          stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
         </svg>
       </button>
 
@@ -98,14 +138,14 @@ const CategoryDropdown = ({
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
           {/* Empty option */}
           <div
-            onClick={() => handleSelectCategory('')}
+            onClick={() => handleSelectCategory("")}
             className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-gray-500"
           >
             No category
           </div>
 
           {/* Category options */}
-          {categories.map(category => (
+          {categories.map((category) => (
             <div key={category.id} className="relative">
               {deleteConfirm === category.id ? (
                 /* Delete confirmation */
@@ -115,13 +155,23 @@ const CategoryDropdown = ({
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => confirmDelete(category.id)}
+                      type="button" // CRITICAL: Prevent form submission
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        confirmDelete(category.id);
+                      }}
                       className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
                     >
                       Delete
                     </button>
                     <button
-                      onClick={cancelDelete}
+                      type="button" // CRITICAL: Prevent form submission
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        cancelDelete();
+                      }}
                       className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
                     >
                       Cancel
@@ -130,24 +180,39 @@ const CategoryDropdown = ({
                 </div>
               ) : (
                 /* Normal category option */
-                <div 
+                <div
                   className={`px-3 py-2 hover:bg-gray-100 cursor-pointer flex justify-between items-center group ${
-                    selectedCategory === category.id ? 'bg-blue-50 text-blue-700' : ''
+                    selectedCategory === category.id
+                      ? "bg-blue-50 text-blue-700"
+                      : ""
                   }`}
                 >
-                  <span 
+                  <span
                     onClick={() => handleSelectCategory(category.id)}
                     className="flex-1"
                   >
                     {category.name}
                   </span>
                   <button
-                    onClick={(e) => handleDeleteClick(e, category.id)}
+                    type="button" // CRITICAL: Prevent form submission
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDeleteClick(e, category.id);
+                    }}
                     className="opacity-0 group-hover:opacity-100 ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded transition-all"
                     title={`Delete ${category.name}`}
                   >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    <svg
+                      className="w-3 h-3"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                   </button>
                 </div>
@@ -167,19 +232,33 @@ const CategoryDropdown = ({
                   onKeyDown={handleAddInputKeyPress}
                   className="w-full border border-gray-300 rounded px-2 py-1 text-sm mb-2"
                   autoFocus
+                  // CRITICAL: Prevent form submission when this input is focused
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                    }
+                  }}
                 />
                 <div className="flex gap-2">
                   <button
-                    onClick={handleAddCategory}
+                    type="button" // CRITICAL: Prevent form submission
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleAddCategory(e);
+                    }}
                     className="px-2 py-1 bg-[#00AFB9] text-white text-xs rounded hover:bg-[#0081A7]"
                     disabled={!newCategoryName.trim()}
                   >
                     Add
                   </button>
                   <button
-                    onClick={() => {
+                    type="button" // CRITICAL: Prevent form submission
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setShowAddInput(false);
-                      setNewCategoryName('');
+                      setNewCategoryName("");
                     }}
                     className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
                   >
@@ -189,7 +268,12 @@ const CategoryDropdown = ({
               </div>
             ) : (
               <button
-                onClick={() => setShowAddInput(true)}
+                type="button" // CRITICAL: Prevent form submission
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowAddInput(true);
+                }}
                 className="w-full px-3 py-2 text-left text-[#00AFB9] hover:bg-gray-100 flex items-center"
               >
                 <span className="mr-2">+</span>

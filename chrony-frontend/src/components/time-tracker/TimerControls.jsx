@@ -269,6 +269,28 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
     }
   };
 
+  // FIXED: Handle editing active timer
+  const handleEdit = () => {
+    if (!activeEntry) {
+      showError("Timer Error", "No active timer to edit");
+      return;
+    }
+
+    try {
+      console.log(
+        "TimerControls: Triggering edit for active timer:",
+        activeEntry
+      );
+      // Call the onEdit function passed from TimeTracker
+      onEdit();
+
+      showInfo("Edit Mode", `Opening editor for "${activeEntry.title}"`);
+    } catch (error) {
+      console.error("Failed to edit timer:", error);
+      showError("Edit Error", "Failed to open timer editor. Please try again.");
+    }
+  };
+
   // When an event is selected from the dropdown
   const handleEventSelect = (e) => {
     const eventId = e.target.value;
@@ -326,8 +348,9 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
             >
               Stop
             </button>
+            {/* FIXED: Use handleEdit instead of onEdit directly */}
             <button
-              onClick={onEdit}
+              onClick={handleEdit}
               className="bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 transition-colors"
             >
               Edit
