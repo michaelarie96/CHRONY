@@ -48,18 +48,28 @@ const TimeTracker = () => {
 
         if (response.ok) {
           const entriesData = await response.json();
-          console.log("Fetched time entries:", entriesData);
+          console.log("Fetched time entries from API:", entriesData);
 
           const parsedEntries = entriesData.map((entry) => ({
             id: entry._id,
             title: entry.title,
             category: entry.category,
-            eventId: entry.event,
+            eventId: entry.event, // FIXED: Keep the original MongoDB ObjectId
             start: new Date(entry.start),
             end: entry.end ? new Date(entry.end) : null,
             duration: entry.duration,
             isRunning: entry.isRunning,
           }));
+
+          console.log(
+            "Parsed time entries for frontend:",
+            parsedEntries.map((e) => ({
+              id: e.id,
+              title: e.title,
+              eventId: e.eventId,
+              eventIdType: typeof e.eventId,
+            }))
+          );
 
           setTimeEntries(parsedEntries);
 
@@ -109,7 +119,7 @@ const TimeTracker = () => {
           id: activeData._id,
           title: activeData.title,
           category: activeData.category,
-          eventId: activeData.event,
+          eventId: activeData.event, // FIXED: Keep the original MongoDB ObjectId
           start: new Date(activeData.start),
           end: null,
           duration: activeData.duration || 0,
@@ -174,9 +184,20 @@ const TimeTracker = () => {
         const parsedEvents = eventsData.map((event) => ({
           ...event,
           id: event._id || event.id,
+          _id: event._id, // FIXED: Keep both _id and id for proper matching
           start: new Date(event.start),
           end: new Date(event.end),
         }));
+
+        console.log(
+          "Loaded events for time tracking:",
+          parsedEvents.map((e) => ({
+            id: e.id,
+            _id: e._id,
+            title: e.title,
+          }))
+        );
+
         setEvents(parsedEvents);
         console.log(
           `📅 Loaded ${parsedEvents.length} calendar events for time tracking`
@@ -286,7 +307,7 @@ const TimeTracker = () => {
           id: createdEntry._id,
           title: createdEntry.title,
           category: createdEntry.category,
-          eventId: createdEntry.event,
+          eventId: createdEntry.event, // FIXED: Use original MongoDB ObjectId
           start: new Date(createdEntry.start),
           end: null,
           duration: 0,
@@ -342,7 +363,7 @@ const TimeTracker = () => {
           id: stoppedEntry._id,
           title: stoppedEntry.title,
           category: stoppedEntry.category,
-          eventId: stoppedEntry.event,
+          eventId: stoppedEntry.event, // FIXED: Use original MongoDB ObjectId
           start: new Date(stoppedEntry.start),
           end: new Date(stoppedEntry.end),
           duration: stoppedEntry.duration,
@@ -493,7 +514,7 @@ const TimeTracker = () => {
             id: updatedEntry._id,
             title: updatedEntry.title,
             category: updatedEntry.category,
-            eventId: updatedEntry.event,
+            eventId: updatedEntry.event, // FIXED: Use original MongoDB ObjectId
             start: new Date(updatedEntry.start),
             end: null, // Still running
             duration: moment().diff(moment(updatedEntry.start), "seconds"),
@@ -524,6 +545,8 @@ const TimeTracker = () => {
         };
 
         let response;
+        let savedEntry;
+
         if (selectedEntry && !isEditingActiveTimer) {
           // Update existing completed entry
           response = await fetch(
@@ -544,10 +567,41 @@ const TimeTracker = () => {
         }
 
         if (response.ok) {
-          console.log("Entry saved successfully");
+          savedEntry = await response.json();
+          console.log("Entry saved successfully:", savedEntry);
 
-          // Refresh the list to ensure consistency
-          await fetchTimeEntries(false);
+          // FIXED: Immediately update local state with new eventId
+          if (selectedEntry && !isEditingActiveTimer) {
+            // Update existing entry in local state
+            setTimeEntries((prev) =>
+              prev.map((entry) =>
+                entry.id === selectedEntry.id
+                  ? {
+                      ...entry,
+                      title: savedEntry.title,
+                      category: savedEntry.category,
+                      eventId: savedEntry.event, // Update with new eventId
+                      start: new Date(savedEntry.start),
+                      end: new Date(savedEntry.end),
+                      duration: savedEntry.duration,
+                    }
+                  : entry
+              )
+            );
+          } else {
+            // Add new entry to local state
+            const newTimeEntry = {
+              id: savedEntry._id,
+              title: savedEntry.title,
+              category: savedEntry.category,
+              eventId: savedEntry.event,
+              start: new Date(savedEntry.start),
+              end: new Date(savedEntry.end),
+              duration: savedEntry.duration,
+              isRunning: false,
+            };
+            setTimeEntries((prev) => [newTimeEntry, ...prev]);
+          }
 
           const operation =
             selectedEntry && !isEditingActiveTimer ? "updated" : "created";
@@ -643,12 +697,54 @@ const TimeTracker = () => {
     return moment.utc(seconds * 1000).format("HH:mm:ss");
   };
 
-  // Get the event associated with an entry (if any)
+  // FIXED: Get the event associated with an entry (if any)
   const getEventForEntry = (entry) => {
-    if (!entry?.eventId) return null;
-    return events.find(
-      (event) => event._id === entry.eventId || event.id === entry.eventId
+    console.log("=== TimeTracker getEventForEntry Debug ===");
+    console.log("Entry received:", {
+      id: entry?.id,
+      title: entry?.title,
+      eventId: entry?.eventId,
+      eventIdType: typeof entry?.eventId,
+    });
+    console.log(
+      "Available events:",
+      events.map((e) => ({
+        id: e.id,
+        _id: e._id,
+        title: e.title,
+      }))
     );
+
+    // If no eventId, return null
+    if (!entry?.eventId) {
+      console.log("No eventId found in entry");
+      return null;
+    }
+
+    // Try to find the event by matching both _id and id fields
+    const foundEvent = events.find((event) => {
+      const eventMongoId = event._id?.toString();
+      const eventRegularId = event.id?.toString();
+      const entryEventId = entry.eventId?.toString();
+
+      const matchesMongoId = eventMongoId === entryEventId;
+      const matchesRegularId = eventRegularId === entryEventId;
+
+      return matchesMongoId || matchesRegularId;
+    });
+
+    console.log(
+      "Found event:",
+      foundEvent
+        ? {
+            id: foundEvent.id,
+            _id: foundEvent._id,
+            title: foundEvent.title,
+          }
+        : "No event found"
+    );
+
+    return foundEvent || null;
   };
 
   // Handle manual refresh

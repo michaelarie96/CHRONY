@@ -195,18 +195,67 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
     return moment.utc(seconds * 1000).format("HH:mm:ss");
   };
 
-  // Filter for ongoing and upcoming events (within 1 hour)
+  // FIXED: Filter for events within a reasonable time range (past 3 days to next 3 days)
   const relevantEvents = events.filter((event) => {
-    const now = new Date();
-    const eventEnd = new Date(event.end);
-    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+    const now = moment();
+    const eventStart = moment(event.start);
+    const eventEnd = moment(event.end);
 
-    // Include events that are ongoing or starting within the next hour
-    return (
-      eventEnd > now && // event hasn't ended yet
-      event.start < oneHourFromNow // event starts within the next hour or has already started
+    // Show events from 3 days ago to 3 days from now
+    const threeDaysAgo = now.clone().subtract(3, "days").startOf("day");
+    const threeDaysFromNow = now.clone().add(3, "days").endOf("day");
+
+    // Include events that either start or end within our time window
+    const startsInRange = eventStart.isBetween(
+      threeDaysAgo,
+      threeDaysFromNow,
+      null,
+      "[]"
     );
+    const endsInRange = eventEnd.isBetween(
+      threeDaysAgo,
+      threeDaysFromNow,
+      null,
+      "[]"
+    );
+    const spansRange =
+      eventStart.isBefore(threeDaysAgo) && eventEnd.isAfter(threeDaysFromNow);
+
+    return startsInRange || endsInRange || spansRange;
   });
+
+  // Sort events by start time (most recent/upcoming first)
+  const sortedRelevantEvents = relevantEvents.sort((a, b) => {
+    const now = moment();
+    const aStart = moment(a.start);
+    const bStart = moment(b.start);
+
+    // Events happening now or soon should be first
+    const aDistance = Math.abs(aStart.diff(now));
+    const bDistance = Math.abs(bStart.diff(now));
+
+    return aDistance - bDistance;
+  });
+
+  // Helper function to format event display text
+  const formatEventDisplayText = (event) => {
+    const eventStart = moment(event.start);
+    const now = moment();
+
+    if (eventStart.isSame(now, "day")) {
+      // Today - show just time
+      return `${event.title} (Today ${eventStart.format("HH:mm")})`;
+    } else if (eventStart.isSame(now.clone().add(1, "day"), "day")) {
+      // Tomorrow
+      return `${event.title} (Tomorrow ${eventStart.format("HH:mm")})`;
+    } else if (eventStart.isSame(now.clone().subtract(1, "day"), "day")) {
+      // Yesterday
+      return `${event.title} (Yesterday ${eventStart.format("HH:mm")})`;
+    } else {
+      // Other days - show day and time
+      return `${event.title} (${eventStart.format("ddd MMM D, HH:mm")})`;
+    }
+  };
 
   // Handle starting the timer with notifications
   const handleStart = async () => {
@@ -389,19 +438,24 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
                 onChange={handleEventSelect}
               >
                 <option value="">Link to Calendar Event</option>
-                {relevantEvents.length > 0 ? (
-                  relevantEvents.map((event) => (
+                {sortedRelevantEvents.length > 0 ? (
+                  sortedRelevantEvents.map((event) => (
                     <option
                       key={event._id || event.id}
                       value={event._id || event.id}
                     >
-                      {event.title} ({moment(event.start).format("HH:mm")})
+                      {formatEventDisplayText(event)}
                     </option>
                   ))
                 ) : (
-                  <option disabled>No upcoming events</option>
+                  <option disabled>No recent events available</option>
                 )}
               </select>
+              {sortedRelevantEvents.length === 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Events from the past 3 days to next 3 days will appear here
+                </p>
+              )}
             </div>
           </div>
 
