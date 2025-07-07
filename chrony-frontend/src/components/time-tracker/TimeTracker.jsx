@@ -3,6 +3,7 @@ import moment from 'moment';
 import TimerControls from './TimerControls';
 import TimeEntryList from './TimeEntryList';
 import TimeEntryForm from './TimeEntryForm';
+import { useNotification } from '../../hooks/useNotification';
 import './TimeTracker.css';
 
 const TimeTracker = () => {
@@ -12,16 +13,25 @@ const TimeTracker = () => {
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
 
   const timerRef = useRef(null);
 
+  // Get notification functions
+  const { showSuccess, showError, showWarning, showInfo } = useNotification();
+
   // Fetch time entries from backend
-  const fetchTimeEntries = useCallback(async () => {
+  const fetchTimeEntries = useCallback(async (showLoadingNotification = false) => {
     try {
       const user = JSON.parse(localStorage.getItem("user"));
       if (!user || !user.userId) {
         console.error("No user found in localStorage");
+        showError("Authentication Error", "Please log in again to access your time entries");
         return;
+      }
+
+      if (showLoadingNotification) {
+        showInfo("Loading", "Refreshing your time entries...");
       }
 
       const response = await fetch(
@@ -44,13 +54,28 @@ const TimeTracker = () => {
         }));
         
         setTimeEntries(parsedEntries);
+        
+        if (initialLoad && parsedEntries.length === 0) {
+          showInfo(
+            "Welcome to Time Tracking", 
+            "Start your first timer to begin tracking your time!",
+            { duration: 6000 }
+          );
+        } else if (showLoadingNotification) {
+          showSuccess("Updated", `Loaded ${parsedEntries.length} time entries`);
+        }
+        
       } else {
-        console.error('Failed to fetch time entries');
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     } catch (error) {
       console.error('Error fetching time entries:', error);
+      showError(
+        "Loading Error", 
+        "Failed to load your time entries. Please check your connection and try again."
+      );
     }
-  }, []);
+  }, [showError, showInfo, showSuccess, initialLoad]);
 
   // Fetch active time entry from backend
   const fetchActiveEntry = useCallback(async () => {
@@ -81,6 +106,16 @@ const TimeTracker = () => {
         
         setActiveEntry(activeTimer);
         
+        // Show notification about resumed timer
+        const startedAgo = moment().diff(moment(activeTimer.start), 'minutes');
+        if (startedAgo > 0) {
+          showInfo(
+            "Timer Resumed", 
+            `Found running timer for "${activeTimer.title}" (started ${startedAgo} minutes ago)`,
+            { duration: 5000 }
+          );
+        }
+        
         timerRef.current = setInterval(() => {
           setActiveEntry(current => {
             if (!current) return null;
@@ -93,11 +128,19 @@ const TimeTracker = () => {
         console.log('No active timer found');
       } else {
         console.error('Failed to fetch active entry');
+        showWarning(
+          "Timer Check Failed", 
+          "Could not check for active timers. You can still start new timers."
+        );
       }
     } catch (error) {
       console.error('Error fetching active entry:', error);
+      showWarning(
+        "Timer Check Failed", 
+        "Could not check for active timers. You can still start new timers."
+      );
     }
-  }, []);
+  }, [showInfo, showWarning]);
 
   // Fetch events from backend
   const fetchEvents = useCallback(async () => {
@@ -124,24 +167,52 @@ const TimeTracker = () => {
           end: new Date(event.end)
         }));
         setEvents(parsedEvents);
+        console.log(`📅 Loaded ${parsedEvents.length} calendar events for time tracking`);
       } else {
         console.error('Failed to fetch events');
+        showWarning(
+          "Calendar Sync Warning", 
+          "Could not load calendar events. Timer linking will be limited."
+        );
       }
     } catch (error) {
       console.error('Error fetching events:', error);
-    } finally {
-      setLoading(false);
+      showWarning(
+        "Calendar Sync Warning", 
+        "Could not load calendar events. Timer linking will be limited."
+      );
     }
-  }, []);
+  }, [showWarning]);
 
   // Load all data on component mount
   useEffect(() => {
     const loadData = async () => {
-      await Promise.all([
-        fetchTimeEntries(),
-        fetchActiveEntry(),
-        fetchEvents()
-      ]);
+      setLoading(true);
+      
+      try {
+        await Promise.all([
+          fetchTimeEntries(false), // Don't show loading notification on initial load
+          fetchActiveEntry(),
+          fetchEvents()
+        ]);
+        
+        if (initialLoad) {
+          showSuccess(
+            "Time Tracker Ready", 
+            "Your time tracking data has been loaded successfully"
+          );
+          setInitialLoad(false);
+        }
+        
+      } catch (error) {
+        console.error("Error loading time tracker data:", error);
+        showError(
+          "Loading Failed", 
+          "Failed to load time tracking data. Please refresh the page to try again."
+        );
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadData();
@@ -151,19 +222,20 @@ const TimeTracker = () => {
         clearInterval(timerRef.current);
       }
     };
-  }, [fetchTimeEntries, fetchActiveEntry, fetchEvents]);
+  }, [fetchTimeEntries, fetchActiveEntry, fetchEvents, showSuccess, showError, initialLoad]);
 
-  // Start the timer
+  // Start the timer with enhanced error handling
   const startTimer = async (title = '', category = null, eventId = null) => {
     try {
       const user = JSON.parse(localStorage.getItem("user"));
       if (!user || !user.userId) {
-        console.error("No user found");
+        showError("Authentication Error", "Please log in to start a timer");
         return;
       }
 
       // Stop any current timer first
       if (activeEntry) {
+        showInfo("Switching Timers", "Stopping current timer and starting new one...");
         await stopTimer();
       }
 
@@ -208,17 +280,24 @@ const TimeTracker = () => {
             return { ...current, duration };
           });
         }, 1000);
+        
+        // Success notification will be handled by TimerControls
       } else {
-        console.error('Failed to start timer');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to start timer');
       }
     } catch (error) {
       console.error('Error starting timer:', error);
+      showError("Timer Start Failed", error.message || "Could not start the timer. Please try again.");
     }
   };
 
-  // Stop the current timer
+  // Stop the current timer with enhanced error handling
   const stopTimer = async () => {
-    if (!activeEntry) return;
+    if (!activeEntry) {
+      showWarning("No Active Timer", "There is no timer currently running");
+      return;
+    }
 
     try {
       clearInterval(timerRef.current);
@@ -247,11 +326,15 @@ const TimeTracker = () => {
 
         setTimeEntries(prev => [completedEntry, ...prev]);
         setActiveEntry(null);
+        
+        // Success notification will be handled by TimerControls
       } else {
-        console.error('Failed to stop timer');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to stop timer');
       }
     } catch (error) {
       console.error('Error stopping timer:', error);
+      showError("Timer Stop Failed", error.message || "Could not stop the timer. Please try again.");
     }
   };
 
@@ -259,14 +342,15 @@ const TimeTracker = () => {
   const handleEditEntry = (entry) => {
     setSelectedEntry(entry);
     setShowForm(true);
+    showInfo("Edit Mode", `Editing "${entry.title || 'Untitled'}" time entry`);
   };
 
-  // Handle saving an entry (new or edited)
+  // Handle saving an entry (new or edited) with enhanced notifications
   const handleSaveEntry = async (entryData) => {
     try {
       const user = JSON.parse(localStorage.getItem("user"));
       if (!user || !user.userId) {
-        console.error("No user found");
+        showError("Authentication Error", "Please log in to save time entries");
         return;
       }
 
@@ -303,21 +387,37 @@ const TimeTracker = () => {
 
       if (response.ok) {
         console.log('Entry saved successfully');
-        await fetchTimeEntries(); // Refresh the list
+        
+        // Refresh the list to ensure consistency
+        await fetchTimeEntries(false);
+        
+        // Success notification will be handled by TimeEntryForm
+        // Just show a brief confirmation here
+        const operation = selectedEntry ? 'updated' : 'created';
+        showSuccess("Saved", `Time entry ${operation} and synced successfully`);
+        
       } else {
-        console.error('Failed to save entry');
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to ${selectedEntry ? 'update' : 'create'} entry`);
       }
     } catch (error) {
       console.error('Error saving entry:', error);
+      showError(
+        "Save Failed", 
+        error.message || "Could not save the time entry. Please try again."
+      );
     }
 
     setShowForm(false);
     setSelectedEntry(null);
   };
 
-  // Handle deleting an entry
+  // Handle deleting an entry with enhanced notifications
   const handleDeleteEntry = async (entryId) => {
     try {
+      const entryToDelete = timeEntries.find(entry => entry.id === entryId) || selectedEntry;
+      const entryTitle = entryToDelete?.title || 'time entry';
+
       const response = await fetch(
         `http://localhost:3000/api/timeEntries/${entryId}`,
         { method: 'DELETE' }
@@ -326,11 +426,20 @@ const TimeTracker = () => {
       if (response.ok) {
         console.log('Entry deleted successfully');
         setTimeEntries(prev => prev.filter(entry => entry.id !== entryId));
+        
+        // Success notification will be handled by TimeEntryForm
+        // Just show sync confirmation here
+        showSuccess("Deleted", `"${entryTitle}" removed and synced successfully`);
       } else {
-        console.error('Failed to delete entry');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete entry');
       }
     } catch (error) {
       console.error('Error deleting entry:', error);
+      showError(
+        "Delete Failed", 
+        error.message || "Could not delete the time entry. Please try again."
+      );
     }
 
     if (showForm) {
@@ -367,14 +476,36 @@ const TimeTracker = () => {
     return events.find(event => event._id === entry.eventId || event.id === entry.eventId);
   };
 
+  // Handle manual refresh
+  const handleRefresh = async () => {
+    showInfo("Refreshing", "Updating your time tracking data...");
+    await fetchTimeEntries(true);
+  };
+
   if (loading) {
-    return <div className="container mx-auto p-4">Loading...</div>;
+    return (
+      <div className="container mx-auto p-4">
+        <div className="bg-white rounded-lg shadow-sm p-6 text-center">
+          <div className="animate-spin inline-block w-8 h-8 border-4 border-[#00AFB9] border-t-transparent rounded-full mb-4"></div>
+          <p className="text-gray-600">Loading your time tracking data...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="time-tracker container mx-auto p-4">
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-4">Time Tracker</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-800">Time Tracker</h2>
+          <button
+            onClick={handleRefresh}
+            className="text-[#00AFB9] hover:text-[#0081A7] transition-colors text-sm flex items-center"
+            title="Refresh data"
+          >
+            <span className="mr-1">🔄</span> Refresh
+          </button>
+        </div>
         
         <div className="mb-6">
           <p className="text-sm text-gray-500 mb-1">Today's total</p>
@@ -402,6 +533,7 @@ const TimeTracker = () => {
             onCancel={() => {
               setShowForm(false);
               setSelectedEntry(null);
+              showInfo("Cancelled", "Changes have been discarded");
             }}
             onDelete={handleDeleteEntry}
           />
@@ -412,6 +544,7 @@ const TimeTracker = () => {
             onClick={() => {
               setSelectedEntry(null);
               setShowForm(true);
+              showInfo("Add Entry", "Creating a new manual time entry");
             }}
             className="bg-[#00AFB9] text-white px-4 py-2 rounded-md hover:bg-[#0081A7] transition-colors flex items-center"
           >
@@ -427,7 +560,10 @@ const TimeTracker = () => {
           activeEntry={activeEntry}
           onEdit={handleEditEntry}
           onDelete={handleDeleteEntry}
-          onContinue={(entry) => startTimer(entry.title, entry.category, entry.eventId)}
+          onContinue={(entry) => {
+            showInfo("Continue Timer", `Starting new timer based on "${entry.title}"`);
+            startTimer(entry.title, entry.category, entry.eventId);
+          }}
           getEventForEntry={getEventForEntry}
         />
       </div>

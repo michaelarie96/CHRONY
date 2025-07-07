@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import moment from 'moment';
-import CategoryDropdown from './CategoryDropdown';
+import React, { useState, useEffect } from "react";
+import moment from "moment";
+import CategoryDropdown from "./CategoryDropdown";
+import { useNotification } from "../../hooks/useNotification";
 
 const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('');
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("");
   const [categories, setCategories] = useState([]);
-  const [selectedEventId, setSelectedEventId] = useState('');
+  const [selectedEventId, setSelectedEventId] = useState("");
   const [categoriesLoading, setCategoriesLoading] = useState(true);
-  
+
+  // Get notification functions
+  const { showSuccess, showError, showInfo } = useNotification();
+
   // Load user categories from database on component mount
   useEffect(() => {
     const loadCategories = async () => {
@@ -22,19 +26,26 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
         const response = await fetch(
           `http://localhost:3000/api/user/categories/${user.userId}`
         );
-        
+
         if (response.ok) {
           const data = await response.json();
-          
+
           // Simply use whatever categories the user has (even if empty)
           setCategories(data.categories);
-          
+
           // Update localStorage cache
-          localStorage.setItem('timeTrackerCategories', JSON.stringify(data.categories));
+          localStorage.setItem(
+            "timeTrackerCategories",
+            JSON.stringify(data.categories)
+          );
         } else {
-          console.error('Failed to load categories from database');
+          console.error("Failed to load categories from database");
+          showError(
+            "Categories Error",
+            "Failed to load categories from database"
+          );
           // Fallback to localStorage if database fails
-          const savedCategories = localStorage.getItem('timeTrackerCategories');
+          const savedCategories = localStorage.getItem("timeTrackerCategories");
           if (savedCategories) {
             setCategories(JSON.parse(savedCategories));
           } else {
@@ -43,9 +54,13 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
           }
         }
       } catch (error) {
-        console.error('Error loading categories:', error);
+        console.error("Error loading categories:", error);
+        showError(
+          "Network Error",
+          "Failed to load categories. Please check your connection."
+        );
         // Fallback to localStorage if database fails
-        const savedCategories = localStorage.getItem('timeTrackerCategories');
+        const savedCategories = localStorage.getItem("timeTrackerCategories");
         if (savedCategories) {
           setCategories(JSON.parse(savedCategories));
         } else {
@@ -57,98 +72,135 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
     };
 
     loadCategories();
-  }, []);
+  }, [showError]);
 
-  // Add a new category
+  // Add a new category with notifications
   const handleAddCategory = async (categoryName) => {
     const newCategoryObj = {
-      id: categoryName.toLowerCase().replace(/\s+/g, '-'),
+      id: categoryName.toLowerCase().replace(/\s+/g, "-"),
       name: categoryName.trim(),
-      color: '#00AFB9' // Default color
+      color: "#00AFB9", // Default color
     };
 
     try {
       const user = JSON.parse(localStorage.getItem("user"));
-      
-      const response = await fetch('http://localhost:3000/api/user/categories', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.userId,
-          ...newCategoryObj
-        }),
-      });
+
+      const response = await fetch(
+        "http://localhost:3000/api/user/categories",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: user.userId,
+            ...newCategoryObj,
+          }),
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
         setCategories(data.categories);
         setCategory(newCategoryObj.id);
-        
+
         // Update localStorage cache
-        localStorage.setItem('timeTrackerCategories', JSON.stringify(data.categories));
-        
-        console.log('Category added successfully');
+        localStorage.setItem(
+          "timeTrackerCategories",
+          JSON.stringify(data.categories)
+        );
+
+        // Show success notification
+        showSuccess(
+          "Category Added",
+          `"${categoryName}" has been added to your categories`
+        );
+        console.log("Category added successfully");
       } else {
         const errorData = await response.json();
-        alert(errorData.message || 'Failed to add category');
+        showError(
+          "Failed to Add Category",
+          errorData.message || "Could not add the category"
+        );
       }
     } catch (error) {
-      console.error('Error adding category:', error);
-      alert('Failed to add category. Please try again.');
+      console.error("Error adding category:", error);
+      showError(
+        "Network Error",
+        "Failed to add category. Please check your connection."
+      );
     }
   };
 
-  // Delete a category
+  // Delete a category with notifications
   const handleDeleteCategory = async (categoryId) => {
+    const categoryToDelete = categories.find((cat) => cat.id === categoryId);
+    const categoryName = categoryToDelete ? categoryToDelete.name : categoryId;
+
     try {
       const user = JSON.parse(localStorage.getItem("user"));
-      
-      const response = await fetch(`http://localhost:3000/api/user/categories/${categoryId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.userId
-        }),
-      });
+
+      const response = await fetch(
+        `http://localhost:3000/api/user/categories/${categoryId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: user.userId,
+          }),
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
         setCategories(data.categories);
-        
+
         // If the deleted category was selected, clear the selection
         if (category === categoryId) {
-          setCategory('');
+          setCategory("");
         }
-        
+
         // Update localStorage cache
-        localStorage.setItem('timeTrackerCategories', JSON.stringify(data.categories));
-        
-        console.log('Category deleted successfully');
+        localStorage.setItem(
+          "timeTrackerCategories",
+          JSON.stringify(data.categories)
+        );
+
+        // Show success notification
+        showSuccess(
+          "Category Deleted",
+          `"${categoryName}" has been removed from your categories`
+        );
+        console.log("Category deleted successfully");
       } else {
         const errorData = await response.json();
-        alert(errorData.message || 'Failed to delete category');
+        showError(
+          "Failed to Delete Category",
+          errorData.message || "Could not delete the category"
+        );
       }
     } catch (error) {
-      console.error('Error deleting category:', error);
-      alert('Failed to delete category. Please try again.');
+      console.error("Error deleting category:", error);
+      showError(
+        "Network Error",
+        "Failed to delete category. Please check your connection."
+      );
     }
   };
-  
+
   // Format seconds into HH:MM:SS
   const formatTime = (seconds) => {
-    return moment.utc(seconds * 1000).format('HH:mm:ss');
+    return moment.utc(seconds * 1000).format("HH:mm:ss");
   };
-  
+
   // Filter for ongoing and upcoming events (within 1 hour)
-  const relevantEvents = events.filter(event => {
+  const relevantEvents = events.filter((event) => {
     const now = new Date();
     const eventEnd = new Date(event.end);
     const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-    
+
     // Include events that are ongoing or starting within the next hour
     return (
       eventEnd > now && // event hasn't ended yet
@@ -156,26 +208,84 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
     );
   });
 
-  // Handle starting the timer
-  const handleStart = () => {
-    onStart(title, category, selectedEventId || null);
-    
-    // Clear the form
-    setTitle('');
-    setCategory('');
-    setSelectedEventId('');
+  // Handle starting the timer with notifications
+  const handleStart = async () => {
+    if (!title.trim()) {
+      showError("Timer Error", "Please enter a title for your timer");
+      return;
+    }
+
+    try {
+      // Show immediate feedback
+      showInfo("Starting Timer", `Starting timer for "${title}"...`);
+
+      await onStart(title, category, selectedEventId || null);
+
+      // Clear the form
+      setTitle("");
+      setCategory("");
+      setSelectedEventId("");
+
+      // Show success notification
+      const linkedEvent =
+        selectedEventId &&
+        events.find((e) => (e._id || e.id) === selectedEventId);
+      const successMessage = linkedEvent
+        ? `Timer started for "${title}" (linked to ${linkedEvent.title})`
+        : `Timer started for "${title}"`;
+
+      showSuccess("Timer Started", successMessage);
+    } catch (error) {
+      console.error("Failed to start timer:", error);
+      showError("Timer Error", "Failed to start the timer. Please try again.");
+    }
+  };
+
+  // Handle stopping the timer with notifications
+  const handleStop = async () => {
+    if (!activeEntry) {
+      showError("Timer Error", "No active timer to stop");
+      return;
+    }
+
+    try {
+      const timerTitle = activeEntry.title || "Untitled";
+      const duration = formatTime(activeEntry.duration || 0);
+
+      // Show immediate feedback
+      showInfo("Stopping Timer", "Stopping and saving your timer...");
+
+      await onStop();
+
+      // Show success notification with duration
+      showSuccess(
+        "Timer Stopped",
+        `"${timerTitle}" completed in ${duration}`,
+        { duration: 5000 } // Show for 5 seconds since it's important
+      );
+    } catch (error) {
+      console.error("Failed to stop timer:", error);
+      showError("Timer Error", "Failed to stop the timer. Please try again.");
+    }
   };
 
   // When an event is selected from the dropdown
   const handleEventSelect = (e) => {
     const eventId = e.target.value;
     setSelectedEventId(eventId);
-    
+
     if (eventId) {
       // If an event is selected, use its title as the title
-      const selectedEvent = events.find(event => event._id === eventId || event.id === eventId);
+      const selectedEvent = events.find(
+        (event) => event._id === eventId || event.id === eventId
+      );
       if (selectedEvent) {
         setTitle(selectedEvent.title);
+        // Show helpful info
+        showInfo(
+          "Event Linked",
+          `Timer will be linked to "${selectedEvent.title}"`
+        );
       }
     }
   };
@@ -187,11 +297,14 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
         <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
             <div className="flex-1">
-              <h3 className="font-medium text-lg mb-1">{activeEntry.title || "Untitled"}</h3>
+              <h3 className="font-medium text-lg mb-1">
+                {activeEntry.title || "Untitled"}
+              </h3>
               <div className="flex items-center text-sm text-gray-600">
                 {activeEntry.category && (
                   <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded mr-2">
-                    {categories.find(cat => cat.id === activeEntry.category)?.name || activeEntry.category}
+                    {categories.find((cat) => cat.id === activeEntry.category)
+                      ?.name || activeEntry.category}
                   </span>
                 )}
                 {activeEntry.eventId && (
@@ -205,15 +318,15 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
               {formatTime(activeEntry.duration || 0)}
             </div>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-2">
-            <button 
-              onClick={onStop}
+            <button
+              onClick={handleStop}
               className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition-colors flex-1"
             >
               Stop
             </button>
-            <button 
+            <button
               onClick={onEdit}
               className="bg-gray-200 text-gray-800 px-4 py-2 rounded hover:bg-gray-300 transition-colors"
             >
@@ -234,7 +347,7 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
-            
+
             <div className="md:col-span-3">
               <CategoryDropdown
                 categories={categories}
@@ -245,18 +358,21 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
                 disabled={categoriesLoading}
               />
             </div>
-            
+
             <div className="md:col-span-4">
-              <select 
+              <select
                 className="w-full border border-gray-300 rounded px-3 py-2"
                 value={selectedEventId}
                 onChange={handleEventSelect}
               >
                 <option value="">Link to Calendar Event</option>
                 {relevantEvents.length > 0 ? (
-                  relevantEvents.map(event => (
-                    <option key={event._id || event.id} value={event._id || event.id}>
-                      {event.title} ({moment(event.start).format('HH:mm')})
+                  relevantEvents.map((event) => (
+                    <option
+                      key={event._id || event.id}
+                      value={event._id || event.id}
+                    >
+                      {event.title} ({moment(event.start).format("HH:mm")})
                     </option>
                   ))
                 ) : (
@@ -265,11 +381,11 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
               </select>
             </div>
           </div>
-          
-          <button 
+
+          <button
             onClick={handleStart}
             className="bg-[#00AFB9] w-full md:w-auto text-white px-6 py-2 rounded hover:bg-[#0081A7] transition-colors"
-            disabled={!title}
+            disabled={!title.trim()}
           >
             Start Timer
           </button>
