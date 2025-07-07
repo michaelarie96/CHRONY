@@ -32,6 +32,36 @@ const TimeEntryList = ({ entries, activeEntry, onEdit, onDelete, onContinue, get
     }
   };
 
+  // Get linked event with enhanced debugging
+  const getLinkedEvent = (entry) => {
+    console.log('=== Getting linked event for entry ===');
+    console.log('Entry:', {
+      title: entry.title,
+      id: entry.id,
+      eventId: entry.eventId,
+      eventIdType: typeof entry.eventId,
+      eventIdValue: JSON.stringify(entry.eventId)
+    });
+
+    // If no eventId, return null
+    if (!entry.eventId) {
+      console.log('No eventId found');
+      return null;
+    }
+
+    // Try to get event using the provided function
+    let event = null;
+    if (getEventForEntry) {
+      event = getEventForEntry(entry);
+      console.log('Event from getEventForEntry:', event);
+      console.log('Event title:', event?.title);
+    } else {
+      console.log('getEventForEntry function not provided');
+    }
+
+    return event;
+  };
+
   // If there are no entries
   if (entries.length === 0 && !activeEntry) {
     return (
@@ -55,7 +85,7 @@ const TimeEntryList = ({ entries, activeEntry, onEdit, onDelete, onContinue, get
               {groupedEntries[date]
                 .sort((a, b) => new Date(b.start) - new Date(a.start)) // Sort entries by start time (newest first)
                 .map(entry => {
-                  const event = getEventForEntry ? getEventForEntry(entry) : null;
+                  const linkedEvent = getLinkedEvent(entry);
                   
                   return (
                     <div 
@@ -63,7 +93,7 @@ const TimeEntryList = ({ entries, activeEntry, onEdit, onDelete, onContinue, get
                       className="bg-white p-3 border border-gray-200 rounded shadow-sm hover:shadow-md transition-shadow"
                     >
                       <div className="flex justify-between">
-                        <div>
+                        <div className="flex-1">
                           <div className="font-medium">{entry.title || "Untitled"}</div>
                           <div className="text-sm text-gray-600 flex flex-wrap gap-2 mt-1">
                             {entry.category && (
@@ -71,11 +101,23 @@ const TimeEntryList = ({ entries, activeEntry, onEdit, onDelete, onContinue, get
                                 {entry.category}
                               </span>
                             )}
-                            {event && (
-                              <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs">
-                                {event.title}
+                            
+                            {/* Show event badge ONLY when we have both eventId AND event title */}
+                            {entry.eventId && linkedEvent && linkedEvent.title && (
+                              <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs flex items-center">
+                                <span className="mr-1">📅</span>
+                                {linkedEvent.title}
                               </span>
                             )}
+                            
+                            {/* DEBUG: Show when we have eventId but no event title */}
+                            {entry.eventId && (!linkedEvent || !linkedEvent.title) && (
+                              <span className="bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs flex items-center">
+                                <span className="mr-1">⚠️</span>
+                                Event link issue (check console)
+                              </span>
+                            )}
+                            
                             <span className="text-gray-500">
                               {moment(entry.start).format('HH:mm')} - {moment(entry.end).format('HH:mm')}
                             </span>
@@ -124,7 +166,7 @@ const TimeEntryList = ({ entries, activeEntry, onEdit, onDelete, onContinue, get
               className="bg-white p-3 border-l-4 border-[#00AFB9] border-t border-r border-b rounded shadow-sm"
             >
               <div className="flex justify-between">
-                <div>
+                <div className="flex-1">
                   <div className="font-medium">{activeEntry.title || "Untitled"}</div>
                   <div className="text-sm text-gray-600 flex gap-2 mt-1">
                     {activeEntry.category && (
@@ -132,11 +174,23 @@ const TimeEntryList = ({ entries, activeEntry, onEdit, onDelete, onContinue, get
                         {activeEntry.category}
                       </span>
                     )}
-                    {getEventForEntry && getEventForEntry(activeEntry) && (
-                      <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs">
+                    
+                    {/* Show active timer event badge ONLY when we have event title */}
+                    {activeEntry.eventId && getEventForEntry && getEventForEntry(activeEntry) && getEventForEntry(activeEntry).title && (
+                      <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs flex items-center">
+                        <span className="mr-1">📅</span>
                         {getEventForEntry(activeEntry).title}
                       </span>
                     )}
+                    
+                    {/* DEBUG: Show when active timer has eventId but no event title */}
+                    {activeEntry.eventId && (!getEventForEntry || !getEventForEntry(activeEntry) || !getEventForEntry(activeEntry).title) && (
+                      <span className="bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs flex items-center">
+                        <span className="mr-1">⚠️</span>
+                        Active event link issue
+                      </span>
+                    )}
+                    
                     <span className="text-gray-500">
                       Started at {moment(activeEntry.start).format('HH:mm')}
                     </span>

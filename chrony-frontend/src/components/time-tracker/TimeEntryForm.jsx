@@ -10,6 +10,7 @@ const TimeEntryForm = ({
   onSave,
   onCancel,
   onDelete,
+  onFormStateChange, // NEW: Callback to preserve form state
   timeEntries = [],
 }) => {
   console.log("Entry received in form:", entry);
@@ -30,6 +31,22 @@ const TimeEntryForm = ({
   // Get notification functions
   const { showSuccess, showError, showWarning, showInfo } = useNotification();
 
+  // NEW: Notify parent of form state changes
+  useEffect(() => {
+    if (onFormStateChange && isEditingActiveTimer) {
+      const formState = {
+        title,
+        startDate,
+        startTime,
+        endDate,
+        endTime,
+        category,
+        eventId
+      };
+      onFormStateChange(formState);
+    }
+  }, [title, startDate, startTime, endDate, endTime, category, eventId, onFormStateChange, isEditingActiveTimer]);
+
   // Load form data when entry changes
   useEffect(() => {
     if (entry) {
@@ -45,7 +62,7 @@ const TimeEntryForm = ({
         setStartTime(now.format("HH:mm"));
       }
 
-      // FIXED: Handle end time properly based on whether entry is completed or active
+      // Handle end time properly based on whether entry is completed or active
       if (entry.end && !isEditingActiveTimer) {
         // Entry has end time and we're not editing active timer - show actual end time
         const end = moment(entry.end);
@@ -78,7 +95,7 @@ const TimeEntryForm = ({
       setEndDate(now.format("YYYY-MM-DD"));
       setEndTime(now.format("HH:mm"));
     }
-  }, [entry, isEditingActiveTimer]); // CRITICAL: React to changes in isEditingActiveTimer
+  }, [entry, isEditingActiveTimer]);
 
   // Load categories from database
   useEffect(() => {
@@ -153,7 +170,7 @@ const TimeEntryForm = ({
         const data = await response.json();
         setCategories(data.categories);
 
-        // FIXED: Automatically select the newly added category
+        // Automatically select the newly added category
         setCategory(newCategoryObj.id);
 
         // Update localStorage cache
@@ -166,9 +183,6 @@ const TimeEntryForm = ({
           "Category Added",
           `"${categoryName}" has been added and selected`
         );
-
-        // FIXED: Don't close the form - the form should stay open
-        // The CategoryDropdown component handles its own state
       } else {
         const errorData = await response.json();
         showError(
@@ -241,7 +255,7 @@ const TimeEntryForm = ({
     }
   };
 
-  // FEATURE: Set start time to last stop time
+  // Set start time to last stop time
   const handleSetToLastStopTime = () => {
     if (!timeEntries || timeEntries.length === 0) {
       showWarning(
@@ -494,8 +508,6 @@ const TimeEntryForm = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* FIXED: Removed the blue banner with running timer since it's redundant */}
-
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Description *
@@ -509,7 +521,7 @@ const TimeEntryForm = ({
             isEditingActiveTimer
               ? "What are you working on?"
               : "What did you work on?"
-          } // FIXED: Dynamic placeholder
+          }
           required
         />
       </div>
@@ -532,7 +544,6 @@ const TimeEntryForm = ({
             <label className="block text-sm font-medium text-gray-700">
               Start Time *
             </label>
-            {/* FEATURE: "Set to Last Stop Time" button - only show for active timers */}
             {isEditingActiveTimer && (
               <button
                 type="button"
@@ -597,7 +608,6 @@ const TimeEntryForm = ({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Category
           </label>
-          {/* Use CategoryDropdown instead of basic select */}
           <CategoryDropdown
             categories={categories}
             selectedCategory={category}

@@ -14,7 +14,10 @@ const TimeTracker = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [initialLoad, setInitialLoad] = useState(true);
-  const [isEditingActiveTimer, setIsEditingActiveTimer] = useState(false); // NEW: Track if editing active timer
+  const [isEditingActiveTimer, setIsEditingActiveTimer] = useState(false);
+
+  // NEW: Store form state to preserve user changes when timer stops
+  const [preservedFormState, setPreservedFormState] = useState(null);
 
   const timerRef = useRef(null);
 
@@ -314,7 +317,7 @@ const TimeTracker = () => {
     }
   };
 
-  // Stop the current timer with enhanced error handling
+  // ENHANCED: Stop timer with form state preservation
   const stopTimer = async () => {
     if (!activeEntry) {
       showWarning("No Active Timer", "There is no timer currently running");
@@ -349,18 +352,51 @@ const TimeTracker = () => {
         setTimeEntries((prev) => [completedEntry, ...prev]);
         setActiveEntry(null);
 
-        // FIXED: If we're editing the active timer that just stopped, update the form state
+        // FIXED: Preserve form state when timer stops during editing
         if (
           isEditingActiveTimer &&
           selectedEntry &&
           selectedEntry.id === activeEntry.id
         ) {
-          console.log("Timer stopped while editing - updating form state");
-          setSelectedEntry(completedEntry); // Update selectedEntry with the completed entry
+          console.log(
+            "Timer stopped while editing - preserving form state and updating entry"
+          );
+          console.log("Preserved form state:", preservedFormState);
+
+          // Create the updated entry with preserved form changes
+          const updatedEntry = {
+            ...completedEntry,
+          };
+
+          // Apply preserved form state if it exists
+          if (preservedFormState) {
+            // Convert preserved dates back to Date objects if they were changed
+            if (preservedFormState.startDate && preservedFormState.startTime) {
+              const preservedStartDate = moment(
+                `${preservedFormState.startDate} ${preservedFormState.startTime}`
+              );
+              if (preservedStartDate.isValid()) {
+                updatedEntry.start = preservedStartDate.toDate();
+                console.log("Preserved start time:", updatedEntry.start);
+              }
+            }
+
+            // Preserve other form fields
+            if (preservedFormState.title)
+              updatedEntry.title = preservedFormState.title;
+            if (preservedFormState.category)
+              updatedEntry.category = preservedFormState.category;
+            if (preservedFormState.eventId)
+              updatedEntry.eventId = preservedFormState.eventId;
+          }
+
+          setSelectedEntry(updatedEntry);
           setIsEditingActiveTimer(false); // No longer editing active timer
+
           showInfo(
             "Timer Stopped",
-            "Timer stopped. You can now edit all fields including end time."
+            "Timer stopped. Your unsaved changes have been preserved. You can now edit all fields.",
+            { duration: 5000 }
           );
         }
 
@@ -378,7 +414,7 @@ const TimeTracker = () => {
     }
   };
 
-  // NEW: Handle editing active timer - properly set it as selected entry
+  // Handle editing active timer - properly set it as selected entry
   const handleEditActiveTimer = () => {
     if (!activeEntry) {
       showWarning(
@@ -391,6 +427,7 @@ const TimeTracker = () => {
     console.log("Editing active timer:", activeEntry);
     setSelectedEntry(activeEntry); // Set the active timer as selected entry
     setIsEditingActiveTimer(true); // Mark that we're editing active timer
+    setPreservedFormState(null); // Clear any previous preserved state
     setShowForm(true);
     showInfo(
       "Edit Active Timer",
@@ -402,8 +439,16 @@ const TimeTracker = () => {
   const handleEditEntry = (entry) => {
     setSelectedEntry(entry);
     setIsEditingActiveTimer(false); // This is not editing active timer
+    setPreservedFormState(null); // Clear any preserved state
     setShowForm(true);
     showInfo("Edit Mode", `Editing "${entry.title || "Untitled"}" time entry`);
+  };
+
+  // NEW: Handle form state changes (called by TimeEntryForm)
+  const handleFormStateChange = (formState) => {
+    if (isEditingActiveTimer) {
+      setPreservedFormState(formState);
+    }
   };
 
   // ENHANCED: Handle saving an entry with active timer logic
@@ -426,7 +471,6 @@ const TimeTracker = () => {
           category: entryData.category,
           event: entryData.eventId,
           user: user.userId,
-          // FIXED: Allow updating start time for active timers
           start: entryData.start,
           isRunning: true,
         };
@@ -450,9 +494,9 @@ const TimeTracker = () => {
             title: updatedEntry.title,
             category: updatedEntry.category,
             eventId: updatedEntry.event,
-            start: new Date(updatedEntry.start), // FIXED: Use updated start time
+            start: new Date(updatedEntry.start),
             end: null, // Still running
-            duration: moment().diff(moment(updatedEntry.start), "seconds"), // FIXED: Recalculate duration from new start time
+            duration: moment().diff(moment(updatedEntry.start), "seconds"),
             isRunning: true,
           };
 
@@ -531,6 +575,7 @@ const TimeTracker = () => {
     setShowForm(false);
     setSelectedEntry(null);
     setIsEditingActiveTimer(false);
+    setPreservedFormState(null); // Clear preserved state after successful save
   };
 
   // Handle deleting an entry with enhanced notifications
@@ -569,6 +614,7 @@ const TimeTracker = () => {
       setShowForm(false);
       setSelectedEntry(null);
       setIsEditingActiveTimer(false);
+      setPreservedFormState(null);
     }
   };
 
@@ -616,6 +662,7 @@ const TimeTracker = () => {
     setShowForm(false);
     setSelectedEntry(null);
     setIsEditingActiveTimer(false);
+    setPreservedFormState(null); // Clear any preserved state
     showInfo("Cancelled", "Changes have been discarded");
   };
 
@@ -651,7 +698,6 @@ const TimeTracker = () => {
           </h3>
         </div>
 
-        {/* FIXED: Pass handleEditActiveTimer function */}
         <TimerControls
           activeEntry={activeEntry}
           onStart={startTimer}
@@ -670,7 +716,7 @@ const TimeTracker = () => {
               ? "Edit Time Entry"
               : "Add Time Entry"}
           </h3>
-          {/* ENHANCED: Pass isEditingActiveTimer prop and timeEntries for "last stop time" feature */}
+          {/* ENHANCED: Pass form state change handler */}
           <TimeEntryForm
             entry={selectedEntry}
             events={events}
@@ -679,6 +725,7 @@ const TimeTracker = () => {
             onSave={handleSaveEntry}
             onCancel={handleCancelForm}
             onDelete={handleDeleteEntry}
+            onFormStateChange={handleFormStateChange}
           />
         </div>
       ) : (
@@ -687,6 +734,7 @@ const TimeTracker = () => {
             onClick={() => {
               setSelectedEntry(null);
               setIsEditingActiveTimer(false);
+              setPreservedFormState(null);
               setShowForm(true);
               showInfo("Add Entry", "Creating a new manual time entry");
             }}
