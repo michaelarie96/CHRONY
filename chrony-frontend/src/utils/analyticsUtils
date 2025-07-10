@@ -1,0 +1,303 @@
+import moment from 'moment';
+
+/**
+ * Calculate planned vs actual analytics for events and time entries
+ * @param {Array} events - Calendar events
+ * @param {Array} timeEntries - Time tracking entries
+ * @returns {Object} Complete analytics data
+ */
+export const calculatePlannedVsActual = (events, timeEntries) => {
+  console.log('🔍 Calculating planned vs actual analytics...');
+  console.log(`📅 Events: ${events.length}, ⏱️ Time Entries: ${timeEntries.length}`);
+
+  // Get analysis for each event that has linked time entries
+  const eventAnalyses = getEventAnalyses(events, timeEntries);
+  
+  // Calculate overall statistics
+  const overallStats = calculateOverallStats(eventAnalyses);
+  
+  // Group data by different time periods
+  const dailyData = groupByDay(eventAnalyses);
+  const weeklyData = groupByWeek(eventAnalyses);
+  
+  const result = {
+    eventAnalyses,
+    overallStats,
+    dailyData,
+    weeklyData,
+    summary: {
+      totalEvents: events.length,
+      trackedEvents: eventAnalyses.length,
+      totalTimeEntries: timeEntries.length,
+      linkedTimeEntries: timeEntries.filter(entry => entry.eventId).length,
+      coverageRate: events.length > 0 ? (eventAnalyses.length / events.length) * 100 : 0
+    }
+  };
+
+  console.log('📊 Analytics calculated:', {
+    trackedEvents: result.summary.trackedEvents,
+    coverageRate: `${result.summary.coverageRate.toFixed(1)}%`,
+    overallEfficiency: `${result.overallStats.efficiency.toFixed(1)}%`
+  });
+
+  return result;
+};
+
+/**
+ * Analyze each event and its linked time entries
+ * @param {Array} events - Calendar events
+ * @param {Array} timeEntries - Time tracking entries
+ * @returns {Array} Event analyses
+ */
+const getEventAnalyses = (events, timeEntries) => {
+  return events.map(event => {
+    // Find all time entries linked to this event
+    const linkedEntries = timeEntries.filter(entry => {
+      // Handle both string and ObjectId comparisons
+      const entryEventId = entry.eventId?.toString();
+      const eventId = event._id?.toString() || event.id?.toString();
+      return entryEventId === eventId;
+    });
+
+    // Skip events with no linked time entries
+    if (linkedEntries.length === 0) {
+      return null;
+    }
+
+    // Calculate planned duration (event duration in seconds)
+    const plannedStart = moment(event.start);
+    const plannedEnd = moment(event.end);
+    const plannedDuration = plannedEnd.diff(plannedStart, 'seconds');
+
+    // Calculate actual duration (sum of all linked time entries)
+    const actualDuration = linkedEntries.reduce((sum, entry) => sum + (entry.duration || 0), 0);
+
+    // Calculate metrics
+    const variance = actualDuration - plannedDuration;
+    const efficiency = plannedDuration > 0 ? (plannedDuration / actualDuration) * 100 : 0;
+    const adherence = getAdherenceLevel(efficiency);
+
+    return {
+      event: {
+        id: event._id || event.id,
+        title: event.title,
+        type: event.type,
+        start: event.start,
+        end: event.end,
+        plannedDuration
+      },
+      timeEntries: linkedEntries.map(entry => ({
+        id: entry.id,
+        title: entry.title,
+        duration: entry.duration,
+        start: entry.start,
+        end: entry.end,
+        category: entry.category
+      })),
+      analysis: {
+        plannedDuration,
+        actualDuration,
+        variance,
+        efficiency,
+        adherence,
+        entryCount: linkedEntries.length,
+        date: moment(event.start).format('YYYY-MM-DD')
+      }
+    };
+  }).filter(analysis => analysis !== null); // Remove events with no linked entries
+};
+
+/**
+ * Calculate overall statistics across all events
+ * @param {Array} eventAnalyses - Individual event analyses
+ * @returns {Object} Overall statistics
+ */
+const calculateOverallStats = (eventAnalyses) => {
+  if (eventAnalyses.length === 0) {
+    return {
+      totalPlannedTime: 0,
+      totalActualTime: 0,
+      totalVariance: 0,
+      efficiency: 0,
+      adherenceDistribution: { perfect: 0, under: 0, over: 0 },
+      averageVariance: 0
+    };
+  }
+
+  const totalPlannedTime = eventAnalyses.reduce((sum, analysis) => sum + analysis.analysis.plannedDuration, 0);
+  const totalActualTime = eventAnalyses.reduce((sum, analysis) => sum + analysis.analysis.actualDuration, 0);
+  const totalVariance = totalActualTime - totalPlannedTime;
+  const efficiency = totalPlannedTime > 0 ? (totalPlannedTime / totalActualTime) * 100 : 0;
+
+  // Calculate adherence distribution
+  const adherenceDistribution = eventAnalyses.reduce((dist, analysis) => {
+    dist[analysis.analysis.adherence]++;
+    return dist;
+  }, { perfect: 0, under: 0, over: 0 });
+
+  // Calculate average variance
+  const averageVariance = eventAnalyses.reduce((sum, analysis) => sum + analysis.analysis.variance, 0) / eventAnalyses.length;
+
+  return {
+    totalPlannedTime,
+    totalActualTime,
+    totalVariance,
+    efficiency,
+    adherenceDistribution,
+    averageVariance,
+    eventCount: eventAnalyses.length
+  };
+};
+
+/**
+ * Group analyses by day
+ * @param {Array} eventAnalyses - Individual event analyses
+ * @returns {Array} Daily grouped data
+ */
+const groupByDay = (eventAnalyses) => {
+  const grouped = eventAnalyses.reduce((groups, analysis) => {
+    const date = analysis.analysis.date;
+    if (!groups[date]) {
+      groups[date] = [];
+    }
+    groups[date].push(analysis);
+    return groups;
+  }, {});
+
+  return Object.keys(grouped).map(date => {
+    const dayAnalyses = grouped[date];
+    const plannedTime = dayAnalyses.reduce((sum, analysis) => sum + analysis.analysis.plannedDuration, 0);
+    const actualTime = dayAnalyses.reduce((sum, analysis) => sum + analysis.analysis.actualDuration, 0);
+    const variance = actualTime - plannedTime;
+    const efficiency = plannedTime > 0 ? (plannedTime / actualTime) * 100 : 0;
+
+    return {
+      date,
+      plannedTime,
+      actualTime,
+      variance,
+      efficiency,
+      eventCount: dayAnalyses.length,
+      events: dayAnalyses
+    };
+  }).sort((a, b) => moment(a.date).diff(moment(b.date))); // Sort by date
+};
+
+/**
+ * Group analyses by week
+ * @param {Array} eventAnalyses - Individual event analyses
+ * @returns {Array} Weekly grouped data
+ */
+const groupByWeek = (eventAnalyses) => {
+  const grouped = eventAnalyses.reduce((groups, analysis) => {
+    const weekStart = moment(analysis.event.start).startOf('week').format('YYYY-MM-DD');
+    if (!groups[weekStart]) {
+      groups[weekStart] = [];
+    }
+    groups[weekStart].push(analysis);
+    return groups;
+  }, {});
+
+  return Object.keys(grouped).map(weekStart => {
+    const weekAnalyses = grouped[weekStart];
+    const plannedTime = weekAnalyses.reduce((sum, analysis) => sum + analysis.analysis.plannedDuration, 0);
+    const actualTime = weekAnalyses.reduce((sum, analysis) => sum + analysis.analysis.actualDuration, 0);
+    const variance = actualTime - plannedTime;
+    const efficiency = plannedTime > 0 ? (plannedTime / actualTime) * 100 : 0;
+
+    const weekEnd = moment(weekStart).endOf('week').format('YYYY-MM-DD');
+
+    return {
+      weekStart,
+      weekEnd,
+      weekLabel: `${moment(weekStart).format('MMM D')} - ${moment(weekEnd).format('MMM D')}`,
+      plannedTime,
+      actualTime,
+      variance,
+      efficiency,
+      eventCount: weekAnalyses.length,
+      events: weekAnalyses
+    };
+  }).sort((a, b) => moment(a.weekStart).diff(moment(b.weekStart))); // Sort by week start
+};
+
+/**
+ * Determine adherence level based on efficiency
+ * @param {number} efficiency - Efficiency percentage
+ * @returns {string} Adherence level
+ */
+const getAdherenceLevel = (efficiency) => {
+  if (efficiency >= 90 && efficiency <= 110) {
+    return 'perfect'; // Within 10% of planned time
+  } else if (efficiency > 110) {
+    return 'under'; // Took less time than planned
+  } else {
+    return 'over'; // Took more time than planned
+  }
+};
+
+/**
+ * Format duration from seconds to human readable format
+ * @param {number} seconds - Duration in seconds
+ * @returns {string} Formatted duration
+ */
+export const formatDuration = (seconds) => {
+  if (seconds === 0) return '0m';
+  
+  const duration = moment.duration(seconds, 'seconds');
+  const hours = Math.floor(duration.asHours());
+  const minutes = duration.minutes();
+  
+  if (hours > 0) {
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  } else {
+    return `${minutes}m`;
+  }
+};
+
+/**
+ * Format variance with + or - prefix
+ * @param {number} varianceSeconds - Variance in seconds
+ * @returns {string} Formatted variance
+ */
+export const formatVariance = (varianceSeconds) => {
+  if (varianceSeconds === 0) return '0m';
+  
+  const prefix = varianceSeconds > 0 ? '+' : '';
+  return `${prefix}${formatDuration(Math.abs(varianceSeconds))}`;
+};
+
+/**
+ * Get color based on adherence level
+ * @param {string} adherence - Adherence level
+ * @returns {string} Color class or hex color
+ */
+export const getAdherenceColor = (adherence) => {
+  switch (adherence) {
+    case 'perfect':
+      return '#10B981'; // Green
+    case 'under':
+      return '#3B82F6'; // Blue
+    case 'over':
+      return '#EF4444'; // Red
+    default:
+      return '#6B7280'; // Gray
+  }
+};
+
+/**
+ * Get efficiency color based on percentage
+ * @param {number} efficiency - Efficiency percentage
+ * @returns {string} Color hex
+ */
+export const getEfficiencyColor = (efficiency) => {
+  if (efficiency >= 90 && efficiency <= 110) {
+    return '#10B981'; // Green - good efficiency
+  } else if (efficiency > 110) {
+    return '#3B82F6'; // Blue - ahead of schedule
+  } else if (efficiency >= 70) {
+    return '#F59E0B'; // Yellow - moderate delay
+  } else {
+    return '#EF4444'; // Red - significant delay
+  }
+};
