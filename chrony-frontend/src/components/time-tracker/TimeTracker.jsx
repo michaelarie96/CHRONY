@@ -699,15 +699,41 @@ const TimeTracker = () => {
 
   // FIXED: Get the event associated with an entry (if any)
   const getEventForEntry = (entry) => {
-    console.log("=== TimeTracker getEventForEntry Debug ===");
+    console.log("=== FIXED TimeTracker getEventForEntry Debug ===");
     console.log("Entry received:", {
       id: entry?.id,
       title: entry?.title,
       eventId: entry?.eventId,
       eventIdType: typeof entry?.eventId,
     });
+
+    // If no eventId, return null
+    if (!entry?.eventId) {
+      console.log("❌ No eventId found in entry");
+      return null;
+    }
+
+    // FIXED: Extract the actual ID from the eventId (which might be an object or string)
+    let actualEventId;
+
+    if (typeof entry.eventId === "object" && entry.eventId !== null) {
+      // If eventId is an object, extract the _id field
+      actualEventId = entry.eventId._id?.toString();
+      console.log("🔧 Extracted ID from object:", actualEventId);
+    } else {
+      // If eventId is already a string, use it directly
+      actualEventId = entry.eventId?.toString();
+      console.log("🔧 Using direct string ID:", actualEventId);
+    }
+
+    if (!actualEventId) {
+      console.log("❌ Could not extract valid ID from eventId");
+      return null;
+    }
+
+    console.log("🔍 Looking for event with ID:", actualEventId);
     console.log(
-      "Available events:",
+      "📋 Available events:",
       events.map((e) => ({
         id: e.id,
         _id: e._id,
@@ -715,33 +741,26 @@ const TimeTracker = () => {
       }))
     );
 
-    // If no eventId, return null
-    if (!entry?.eventId) {
-      console.log("No eventId found in entry");
-      return null;
-    }
-
-    // Try to find the event by matching both _id and id fields
+    // Find the event by matching the extracted ID
     const foundEvent = events.find((event) => {
       const eventMongoId = event._id?.toString();
       const eventRegularId = event.id?.toString();
-      const entryEventId = entry.eventId?.toString();
 
-      const matchesMongoId = eventMongoId === entryEventId;
-      const matchesRegularId = eventRegularId === entryEventId;
+      const matchesMongoId = eventMongoId === actualEventId;
+      const matchesRegularId = eventRegularId === actualEventId;
 
       return matchesMongoId || matchesRegularId;
     });
 
     console.log(
-      "Found event:",
+      "✅ Found event:",
       foundEvent
         ? {
             id: foundEvent.id,
             _id: foundEvent._id,
             title: foundEvent.title,
           }
-        : "No event found"
+        : "❌ No event found"
     );
 
     return foundEvent || null;
