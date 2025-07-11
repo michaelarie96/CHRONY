@@ -89,8 +89,8 @@ const Analytics = () => {
 
       if (response.ok) {
         const eventsData = await response.json();
-        console.log("📅 Fetched events for analytics:", eventsData.length);
         setEvents(eventsData);
+        console.log(`📅 Loaded ${eventsData.length} events for analytics`);
       } else {
         console.error("Failed to fetch events");
       }
