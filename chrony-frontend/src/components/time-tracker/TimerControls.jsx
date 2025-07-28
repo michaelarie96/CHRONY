@@ -259,11 +259,6 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
 
   // Handle starting the timer with notifications
   const handleStart = async () => {
-    if (!title.trim()) {
-      showError("Timer Error", "Please enter a title for your timer");
-      return;
-    }
-
     try {
       // Show immediate feedback
       showInfo("Starting Timer", `Starting timer for "${title}"...`);
@@ -346,18 +341,19 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
     setSelectedEventId(eventId);
 
     if (eventId) {
-      // If an event is selected, use its title as the title
+      // Only auto-fill title if current title is empty
       const selectedEvent = events.find(
         (event) => event._id === eventId || event.id === eventId
       );
-      if (selectedEvent) {
+      if (selectedEvent && !title.trim()) {
         setTitle(selectedEvent.title);
-        // Show helpful info
-        showInfo(
-          "Event Linked",
-          `Timer will be linked to "${selectedEvent.title}"`
-        );
       }
+
+      // Show helpful info
+      showInfo(
+        "Event Linked",
+        `Timer will be linked to "${selectedEvent.title}"`
+      );
     }
   };
 
@@ -462,7 +458,6 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
           <button
             onClick={handleStart}
             className="bg-[#00AFB9] w-full md:w-auto text-white px-6 py-2 rounded hover:bg-[#0081A7] transition-colors"
-            disabled={!title.trim()}
           >
             Start Timer
           </button>

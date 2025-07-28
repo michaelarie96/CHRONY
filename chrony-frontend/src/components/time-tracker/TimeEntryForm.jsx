@@ -41,11 +41,21 @@ const TimeEntryForm = ({
         endDate,
         endTime,
         category,
-        eventId
+        eventId,
       };
       onFormStateChange(formState);
     }
-  }, [title, startDate, startTime, endDate, endTime, category, eventId, onFormStateChange, isEditingActiveTimer]);
+  }, [
+    title,
+    startDate,
+    startTime,
+    endDate,
+    endTime,
+    category,
+    eventId,
+    onFormStateChange,
+    isEditingActiveTimer,
+  ]);
 
   // Load form data when entry changes
   useEffect(() => {
@@ -295,15 +305,6 @@ const TimeEntryForm = ({
 
   // Comprehensive form validation
   const validateForm = () => {
-    // Check required fields
-    if (!title.trim()) {
-      showError(
-        "Validation Error",
-        "Please enter a description for this time entry"
-      );
-      return false;
-    }
-
     if (!startDate || !startTime) {
       showError("Validation Error", "Please fill in start date and time");
       return false;
@@ -497,6 +498,11 @@ const TimeEntryForm = ({
         (event) => (event._id || event.id) === selectedEventId
       );
       if (linkedEvent) {
+        // Only auto-fill title if current title is empty
+        if (!title.trim()) {
+          setTitle(linkedEvent.title);
+        }
+
         showInfo(
           "Event Linked",
           `Time entry will be linked to "${linkedEvent.title}"`,
@@ -522,7 +528,6 @@ const TimeEntryForm = ({
               ? "What are you working on?"
               : "What did you work on?"
           }
-          required
         />
       </div>
 
