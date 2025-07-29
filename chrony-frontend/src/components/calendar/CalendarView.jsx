@@ -6,15 +6,12 @@ import { useNotification } from "../../hooks/useNotification";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "./calendar.css";
 
-// for 24 hours time format
 const formats = {
   timeGutterFormat: "HH:mm",
-  eventTimeRangeFormat: ({ start, end }, culture, local) =>
-    `${local.format(start, "HH:mm", culture)} – ${local.format(
-      end,
-      "HH:mm",
-      culture
-    )}`,
+  // Remove time display from events but keep for tooltips
+  eventTimeRangeFormat: () => '',
+  dayRangeHeaderFormat: ({ start, end }, culture, local) =>
+    `${local.format(start, "MMMM DD", culture)} – ${local.format(end, "DD, YYYY", culture)}`,
 };
 
 const eventTypes = {
@@ -393,26 +390,24 @@ const WeeklyView = () => {
   }, [showForm, scrollPosition]);
 
   // Custom event display component
-  const EventComponent = ({ event }) => (
+const EventComponent = ({ event }) => {
+  const tooltipText = `${event.title}\n${moment(event.start).format('h:mm A')} - ${moment(event.end).format('h:mm A')}`;
+  
+  return (
     <div
       className="h-full rounded px-2 py-1 overflow-hidden"
       style={{
         backgroundColor: eventTypes[event.type].bgColor,
         borderLeft: `3px solid ${eventTypes[event.type].color}`,
       }}
+      title={tooltipText}
     >
-      <div
-        className="text-xs inline-block px-1 py-0.5 rounded mb-1"
-        style={{
-          backgroundColor: eventTypes[event.type].color,
-          color: "white",
-        }}
-      >
-        {eventTypes[event.type].name}
+      <div className="font-medium text-gray-800 text-sm leading-tight truncate">
+        {event.title}
       </div>
-      <div className="font-medium text-gray-800 text-sm">{event.title}</div>
     </div>
   );
+};
 
   // Handler for clicking on an event
   const handleSelectEvent = (event) => {
