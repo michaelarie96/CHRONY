@@ -86,21 +86,9 @@
 }
 
 /* Current time indicator */
-.rbc-current-time-indicator {
-  background-color: #F07167;
-  height: 2px;
-  position: relative;
-}
-
+.rbc-current-time-indicator,
 .rbc-current-time-indicator::before {
-  content: '';
-  position: absolute;
-  height: 8px;
-  width: 8px;
-  background-color: #F07167;
-  border-radius: 50%;
-  left: -4px;
-  top: -3px;
+  display: none !important;
 }
 
 /* Time gutter */
