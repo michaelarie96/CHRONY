@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import moment from "moment";
 import { useNotification } from "../../hooks/useNotification";
 import CategoryDropdown from "./CategoryDropdown";
+import TitleAutocomplete from "./TitleAutocomplete";
 
 const TimeEntryForm = ({
   entry,
@@ -150,6 +151,24 @@ const TimeEntryForm = ({
 
     loadCategories();
   }, []);
+
+  // Handle autocomplete selection - auto-fill title and category
+  const handleAutocompleteSelect = (selection) => {
+    console.log("TimeEntryForm autocomplete selected:", selection);
+
+    // Title is already set by the autocomplete component
+    // We just need to update the category
+    if (selection.category) {
+      setCategory(selection.category);
+      showInfo(
+        "Auto-filled",
+        `Category set to "${
+          categories.find((cat) => cat.id === selection.category)?.name ||
+          selection.category
+        }"`
+      );
+    }
+  };
 
   // Add a new category and automatically select it
   const handleAddCategory = async (categoryName) => {
@@ -518,16 +537,18 @@ const TimeEntryForm = ({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Description *
         </label>
-        <input
-          type="text"
-          className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-[#00AFB9] focus:border-transparent"
+        <TitleAutocomplete
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={setTitle}
+          onSelect={handleAutocompleteSelect}
+          timeEntries={timeEntries}
+          categories={categories}
           placeholder={
             isEditingActiveTimer
               ? "What are you working on?"
               : "What did you work on?"
           }
+          className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-[#00AFB9] focus:border-transparent"
         />
       </div>
 

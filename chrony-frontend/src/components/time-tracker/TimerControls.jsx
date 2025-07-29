@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from "react";
 import moment from "moment";
 import CategoryDropdown from "./CategoryDropdown";
+import TitleAutocomplete from "./TitleAutocomplete";
 import { useNotification } from "../../hooks/useNotification";
 
-const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
+const TimerControls = ({
+  activeEntry,
+  onStart,
+  onStop,
+  onEdit,
+  events,
+  timeEntries = [],
+}) => {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [categories, setCategories] = useState([]);
@@ -186,6 +194,24 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
       showError(
         "Network Error",
         "Failed to delete category. Please check your connection."
+      );
+    }
+  };
+
+  // Handle autocomplete selection - auto-fill title and category
+  const handleAutocompleteSelect = (selection) => {
+    console.log("Autocomplete selected:", selection);
+
+    // Title is already set by the autocomplete component
+    // We just need to update the category
+    if (selection.category) {
+      setCategory(selection.category);
+      showInfo(
+        "Auto-filled",
+        `Category set to "${
+          categories.find((cat) => cat.id === selection.category)?.name ||
+          selection.category
+        }"`
       );
     }
   };
@@ -407,12 +433,14 @@ const TimerControls = ({ activeEntry, onStart, onStop, onEdit, events }) => {
         <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-3">
             <div className="md:col-span-5">
-              <input
-                type="text"
+              <TitleAutocomplete
+                value={title}
+                onChange={setTitle}
+                onSelect={handleAutocompleteSelect}
+                timeEntries={timeEntries}
+                categories={categories}
                 placeholder="What are you working on?"
                 className="w-full border border-gray-300 rounded px-3 py-2"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
               />
             </div>
 

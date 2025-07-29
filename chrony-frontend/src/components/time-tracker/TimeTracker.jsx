@@ -819,6 +819,7 @@ const TimeTracker = () => {
           onStop={stopTimer}
           onEdit={handleEditActiveTimer}
           events={events}
+          timeEntries={timeEntries}
         />
       </div>
 
