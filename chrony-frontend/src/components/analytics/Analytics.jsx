@@ -130,17 +130,26 @@ const Analytics = () => {
     loadData();
   }, [fetchTimeEntries, fetchEvents]);
 
-  // Prepare data for charts
+  // Helper function to truncate text for pie chart labels
+  const truncateText = (text, maxLength = 8) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, 8) + ".";
+  };
+
+  // Prepare data for charts with improved colors and truncation
   const getPieChartData = () => {
     const timeByCategory = getTimeByCategory();
-    const colors = ["#0081A7", "#00AFB9", "#F07167", "#FED9B7", "#FDFCDC"];
+    // Replace light colors with more visible ones
+    const colors = ["#0081A7", "#00AFB9", "#F07167", "#FED9B7", "#10B981"];
 
     return Object.entries(timeByCategory).map(([category, seconds], index) => {
       const categoryData = categories.find((cat) => cat.id === category);
       const displayName = categoryData ? categoryData.name : category;
+      const truncatedName = truncateText(displayName, 9);
 
       return {
-        name: displayName,
+        name: truncatedName, 
+        fullName: displayName, 
         value: seconds,
         hours: Math.round((seconds / 3600) * 10) / 10, // Round to 1 decimal
         fill: colors[index % colors.length],
@@ -242,13 +251,13 @@ const Analytics = () => {
   const pieChartData = getPieChartData();
   const dailyActivityData = getDailyActivityData();
 
-  // Custom tooltip for pie chart
+  // Enhanced tooltip to show full category name
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
         <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
-          <p className="font-medium">{data.name}</p>
+          <p className="font-medium">{data.fullName}</p>
           <p className="text-sm text-gray-600">{data.hours} hours</p>
         </div>
       );
