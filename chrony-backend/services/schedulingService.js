@@ -168,7 +168,7 @@ class SchedulingService {
     );
   }
 
-/**
+  /**
    * Place a flexible event - can move within same day, may need to move fluid events
    */
   async placeFlexibleEventWithCascading(
@@ -184,13 +184,17 @@ class SchedulingService {
       ? Math.floor(event.duration / 60)
       : Math.floor((new Date(event.end) - new Date(event.start)) / (1000 * 60));
 
-    console.log(`${"  ".repeat(depth)}📅 Flexible event target date: ${targetDate}`);
+    console.log(
+      `${"  ".repeat(depth)}📅 Flexible event target date: ${targetDate}`
+    );
 
     // Check if trying to schedule on a past date
-    if (targetDateMoment.isBefore(now, 'day')) {
+    if (targetDateMoment.isBefore(now, "day")) {
       return {
         success: false,
-        error: `Cannot schedule flexible events on past dates. Target date: ${targetDateMoment.format('dddd, MMM D, YYYY')}, Today: ${now.format('dddd, MMM D, YYYY')}`,
+        error: `Cannot schedule flexible events on past dates. Target date: ${targetDateMoment.format(
+          "dddd, MMM D, YYYY"
+        )}, Today: ${now.format("dddd, MMM D, YYYY")}`,
         movedEvents: [],
       };
     }
@@ -238,7 +242,7 @@ class SchedulingService {
     );
   }
 
-/**
+  /**
    * Place a fluid event - lowest priority, try to find any available slot in specified week
    */
   async placeFluidEventWithCascading(
@@ -250,21 +254,29 @@ class SchedulingService {
     const durationMinutes = event.duration
       ? Math.floor(event.duration / 60)
       : Math.floor((new Date(event.end) - new Date(event.start)) / (1000 * 60));
-    
+
     // Use targetWeekStart if provided, otherwise default to current week
     let weekStart;
     if (event.targetWeekStart) {
       weekStart = moment(event.targetWeekStart);
-      console.log(`${"  ".repeat(depth)}🌊 Using specified week: ${weekStart.format('MMM D, YYYY')}`);
+      console.log(
+        `${"  ".repeat(depth)}🌊 Using specified week: ${weekStart.format(
+          "MMM D, YYYY"
+        )}`
+      );
     } else {
       weekStart = moment(event.start).startOf("week");
-      console.log(`${"  ".repeat(depth)}🌊 Using default week from event start`);
+      console.log(
+        `${"  ".repeat(depth)}🌊 Using default week from event start`
+      );
     }
 
     console.log(
       `${"  ".repeat(
         depth
-      )}🌊 Finding ${durationMinutes}min slot in week ${weekStart.format('MMM D')} - ${weekStart.clone().endOf('week').format('MMM D')}`
+      )}🌊 Finding ${durationMinutes}min slot in week ${weekStart.format(
+        "MMM D"
+      )} - ${weekStart.clone().endOf("week").format("MMM D")}`
     );
 
     // Get working days (excluding rest day and past days)
@@ -273,7 +285,9 @@ class SchedulingService {
     if (workingDays.length === 0) {
       return {
         success: false,
-        error: `No working days available in the selected week (${weekStart.format('MMM D')} - ${weekStart.clone().endOf('week').format('MMM D')})`,
+        error: `No working days available in the selected week (${weekStart.format(
+          "MMM D"
+        )} - ${weekStart.clone().endOf("week").format("MMM D")})`,
         movedEvents: [],
       };
     }
@@ -317,7 +331,9 @@ class SchedulingService {
     // No available slots in the week
     return {
       success: false,
-      error: `No available ${durationMinutes}-minute slots in the selected week (${weekStart.format('MMM D')} - ${weekStart.clone().endOf('week').format('MMM D')})`,
+      error: `No available ${durationMinutes}-minute slots in the selected week (${weekStart.format(
+        "MMM D"
+      )} - ${weekStart.clone().endOf("week").format("MMM D")})`,
       movedEvents: [],
     };
   }
@@ -338,7 +354,7 @@ class SchedulingService {
       } conflicts through cascading`
     );
 
-    // Separate conflicts by type and process in priority order (fluid first, then flexible)
+    // Separate conflicts by type
     const fluidConflicts = conflicts.filter((c) => c.type === "fluid");
     const flexibleConflicts = conflicts.filter((c) => c.type === "flexible");
 
@@ -371,6 +387,7 @@ class SchedulingService {
         id: fluidEvent._id || fluidEvent.id,
       });
 
+      // Remove from current existing events
       currentExistingEvents = currentExistingEvents.filter(
         (e) =>
           e._id?.toString() !== fluidEvent._id?.toString() &&
@@ -391,6 +408,18 @@ class SchedulingService {
         forbiddenZones: initialForbiddenZones,
       };
 
+      const schedulingContext = [
+        ...currentExistingEvents,
+        ...allMovedEvents.map((movedEvent) => ({
+          _id: movedEvent._id,
+          id: movedEvent.id || movedEvent._id,
+          start: movedEvent.start,
+          end: movedEvent.end,
+          title: movedEvent.title,
+          type: movedEvent.type,
+        })),
+      ];
+
       console.log(
         `${"  ".repeat(depth)}📤 Sending to placeEventWithCascading:`,
         {
@@ -402,7 +431,7 @@ class SchedulingService {
 
       const moveResult = await this.placeEventWithCascading(
         eventToMove,
-        [...currentExistingEvents, ...allMovedEvents],
+        schedulingContext,
         userSettings,
         depth + 1
       );
@@ -415,7 +444,13 @@ class SchedulingService {
         };
       }
 
-      allMovedEvents.push(moveResult.scheduledEvent);
+      const movedEventWithIds = {
+        ...moveResult.scheduledEvent,
+        _id: fluidEvent._id || moveResult.scheduledEvent._id,
+        id: fluidEvent.id || fluidEvent._id || moveResult.scheduledEvent.id,
+      };
+
+      allMovedEvents.push(movedEventWithIds);
       allMovedEvents.push(...moveResult.movedEvents);
     }
 
@@ -433,7 +468,6 @@ class SchedulingService {
           e.id !== flexibleEvent.id
       );
 
-      // Create the event object explicitly
       const eventToMove = {
         _id: flexibleEvent._id,
         id: flexibleEvent.id,
@@ -447,6 +481,18 @@ class SchedulingService {
         forbiddenZones: initialForbiddenZones,
       };
 
+      const schedulingContext = [
+        ...currentExistingEvents,
+        ...allMovedEvents.map((movedEvent) => ({
+          _id: movedEvent._id,
+          id: movedEvent.id || movedEvent._id,
+          start: movedEvent.start,
+          end: movedEvent.end,
+          title: movedEvent.title,
+          type: movedEvent.type,
+        })),
+      ];
+
       console.log(
         `${"  ".repeat(depth)}📤 Sending to placeEventWithCascading:`,
         {
@@ -458,7 +504,7 @@ class SchedulingService {
 
       const moveResult = await this.placeEventWithCascading(
         eventToMove,
-        [...currentExistingEvents, ...allMovedEvents],
+        schedulingContext,
         userSettings,
         depth + 1
       );
@@ -471,7 +517,14 @@ class SchedulingService {
         };
       }
 
-      allMovedEvents.push(moveResult.scheduledEvent);
+      const movedEventWithIds = {
+        ...moveResult.scheduledEvent,
+        _id: flexibleEvent._id || moveResult.scheduledEvent._id,
+        id:
+          flexibleEvent.id || flexibleEvent._id || moveResult.scheduledEvent.id,
+      };
+
+      allMovedEvents.push(movedEventWithIds);
       allMovedEvents.push(...moveResult.movedEvents);
     }
 
@@ -485,29 +538,33 @@ class SchedulingService {
     };
   }
 
-/**
+  /**
    * Check basic constraints (rest day, active hours, past time) without considering conflicts
    */
   checkBasicConstraints(event, userSettings) {
     const now = moment();
     const eventStart = moment(event.start);
     const eventEnd = moment(event.end);
-    
+
     // Only check past time for FIXED events (flexible/fluid use placeholder times)
-    if (event.type === 'fixed') {
+    if (event.type === "fixed") {
       // Check if fixed event is trying to be scheduled in the past
       if (eventEnd.isBefore(now)) {
         return {
           valid: false,
-          error: `Cannot schedule events in the past. Event ends at ${eventEnd.format('dddd, MMM D [at] h:mm A')} but current time is ${now.format('dddd, MMM D [at] h:mm A')}`
+          error: `Cannot schedule events in the past. Event ends at ${eventEnd.format(
+            "dddd, MMM D [at] h:mm A"
+          )} but current time is ${now.format("dddd, MMM D [at] h:mm A")}`,
         };
       }
-      
+
       // For fixed events, be strict about start time being in the past
       if (eventStart.isBefore(now)) {
         return {
           valid: false,
-          error: `Fixed events cannot start in the past. Requested start time: ${eventStart.format('dddd, MMM D [at] h:mm A')}, Current time: ${now.format('dddd, MMM D [at] h:mm A')}`
+          error: `Fixed events cannot start in the past. Requested start time: ${eventStart.format(
+            "dddd, MMM D [at] h:mm A"
+          )}, Current time: ${now.format("dddd, MMM D [at] h:mm A")}`,
         };
       }
     }
@@ -526,7 +583,10 @@ class SchedulingService {
     // Check if event fits within active hours (for all event types)
     // Note: For flexible/fluid events, this checks placeholder times, but that's okay
     // because the actual scheduling will respect active hours anyway
-    if (event.type === 'fixed' && !this.isWithinActiveHours(event.start, event.end, userSettings)) {
+    if (
+      event.type === "fixed" &&
+      !this.isWithinActiveHours(event.start, event.end, userSettings)
+    ) {
       const startTime = eventStart.format("HH:mm");
       const endTime = eventEnd.format("HH:mm");
       return {

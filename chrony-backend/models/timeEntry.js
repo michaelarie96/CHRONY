@@ -5,7 +5,7 @@ const timeEntrySchema = new mongoose.Schema({
     type: String,
     required: false,
     trim: true,
-    default: '',
+    default: "",
   },
   start: {
     type: Date,
